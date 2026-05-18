@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Reputation — AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Ecosystem</span><span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Reputation</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('reputation.leaderboard') }}" class="btn-v2 btn-v2--primary btn-v2--sm">🏆 Leaderboard</a>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <section class="hero-v2 animate-fade-up" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(239,68,68,.06),rgba(168,85,247,.08));">
+                <div class="hero-v2__eyebrow">⭐ Reputation System</div>
+                <h1 class="hero-v2__title">Earn badges, climb leaderboards, build prestige.</h1>
+                <p class="hero-v2__desc">Your contributions earn XP, unlock badges, and raise your trust level in the community.</p>
+            </section>
+
+            {% if current_user.is_authenticated %}
+            <!-- Your Stats -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Your Reputation</h2></div>
+                <div class="grid-4" style="margin-bottom:var(--sp-5);">
+                    <div class="stat-v2"><div class="stat-v2__label">Level</div><div class="stat-v2__value">{{ current_user.level }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Total XP</div><div class="stat-v2__value">{{ current_user.xp_total }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Streak</div><div class="stat-v2__value">{{ user_streak.current if user_streak else 0 }}🔥</div><div class="stat-v2__hint">Longest: {{ user_streak.longest if user_streak else 0 }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Badges</div><div class="stat-v2__value">{{ user_badges|length }}</div></div>
+                </div>
+                <!-- XP Progress -->
+                {% set xp = current_user.xp_progress %}
+                <div style="display:flex;align-items:center;gap:var(--sp-4);">
+                    <div class="score-circle" style="--size:64px;--pct:{{ xp.percent }};flex-shrink:0;">
+                        <svg viewBox="0 0 100 100"><circle class="score-circle__track" cx="50" cy="50" r="40"/><circle class="score-circle__fill" cx="50" cy="50" r="40"/></svg>
+                        <span class="score-circle__label" style="font-size:var(--text-sm);">{{ xp.level }}</span>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="progress-v2"><div class="progress-v2__fill" style="width:{{ xp.percent }}%;"></div></div>
+                        <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--sp-2);">{{ xp.current }}/{{ xp.needed }} XP to Level {{ xp.level + 1 }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Your Badges -->
+            {% if user_badges %}
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Your Badges</h2></div>
+                <div class="grid-4 stagger">
+                    {% for badge in user_badges %}
+                    <div class="card-v2" style="text-align:center;padding:var(--sp-5);">
+                        <div style="font-size:2rem;margin-bottom:var(--sp-2);">{{ badge.icon }}</div>
+                        <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">{{ badge.name }}</div>
+                        <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--sp-1);">{{ badge.description }}</div>
+                        <span class="badge-v2 badge-v2--{{ 'warning' if badge.tier == 'gold' else 'accent' if badge.tier == 'platinum' else 'info' if badge.tier == 'silver' else 'primary' }}" style="margin-top:var(--sp-2);">{{ badge.tier|title }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Top Creators Leaderboard -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header">
+                    <h2 class="section-header__title">🏆 Top Creators</h2>
+                    <a href="{{ url_for('reputation.leaderboard') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Full Leaderboard</a>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
+                    {% for user in top_users %}
+                    <a href="/{{ user.username }}" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
+                        <span style="width:28px;font-family:var(--font-display);font-size:var(--text-md);font-weight:700;color:{% if loop.index <= 3 %}var(--warning){% else %}var(--text-faint){% endif %};">{{ loop.index }}</span>
+                        <div class="avatar-v2 avatar-v2--sm {% if loop.index <= 3 %}avatar-v2--ring{% endif %}">{{ user.username[0]|upper }}</div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ user.username }}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-family:var(--font-display);font-size:var(--text-sm);font-weight:600;color:var(--primary-hover);">{{ user.xp_total }} XP</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-faint);">Lv.{{ user.level }}</div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- All Badges -->
+            {% if badges %}
+            <div class="card-v2 animate-fade-up">
+                <div class="section-header"><h2 class="section-header__title">All Badges</h2></div>
+                <div class="grid-4 stagger">
+                    {% for badge in badges %}
+                    <div class="card-v2" style="text-align:center;padding:var(--sp-4);opacity:{{ '1' if badge in user_badges else '.5' }};">
+                        <div style="font-size:1.75rem;margin-bottom:var(--sp-2);">{{ badge.icon }}</div>
+                        <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">{{ badge.name }}</div>
+                        <div style="font-size:var(--text-2xs);color:var(--text-muted);margin-top:var(--sp-1);">{{ badge.description }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

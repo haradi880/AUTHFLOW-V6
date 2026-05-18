@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ project.title }} - AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/feed.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+{% endblock %}
+{% block content %}
+<main class="blog-container">
+    {% set items = [('Projects', url_for('project.projects_feed')), (project.title, None)] %}
+    {% include 'components/breadcrumb.html' %}
+    <article class="content-card">
+        <div class="blog-meta">
+            {% if project.category %}<span class="blog-category">{{ project.category.name }}</span>{% endif %}
+            <span style="color: var(--text-muted);">{{ project.created_at.strftime('%b %d, %Y') }}</span>
+        </div>
+        <h1 class="blog-title">{{ project.title }}</h1>
+        <p class="blog-excerpt">{{ project.description }}</p>
+        <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap; margin-bottom: var(--spacing-lg);">
+            {% for tag in project.tags %}<span class="skill-tag">{{ tag.name }}</span>{% endfor %}
+        </div>
+        <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap;">
+            {% if project.github_url %}<a href="{{ project.github_url }}" target="_blank" rel="noopener" class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary);">GitHub</a>{% endif %}
+            {% if project.demo_url %}<a href="{{ project.demo_url }}" target="_blank" rel="noopener" class="btn btn-primary">Live Demo</a>{% endif %}
+            {% if current_user.is_authenticated %}
+            <button type="button" class="btn btn-secondary project-star-btn {{ 'active' if is_starred else '' }}" data-project-id="{{ project.id }}">
+                <span>{{ 'Starred' if is_starred else 'Star' }}</span>
+                <strong class="project-star-count">{{ project.stars_count }}</strong>
+            </button>
+            {% else %}
+            <span class="blog-tag">{{ project.stars_count }} stars</span>
+            {% endif %}
+            {% if project.demo_url %}<span class="blog-tag">Live</span>{% endif %}
+            {% if gallery %}<span class="blog-tag">{{ gallery|length }} screenshots</span>{% endif %}
+            {% if current_user.is_authenticated and current_user.id == project.user_id %}
+            <a href="{{ url_for('project.edit_project', project_id=project.id) }}" class="btn" style="background: var(--bg-tertiary); color: var(--text-secondary);">Edit</a>
+            {% endif %}
+        </div>
+        {% if current_user.is_authenticated and current_user.id == project.user_id %}
+        <details style="margin-top: var(--spacing-lg); padding: var(--spacing-md); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);">
+            <summary style="cursor: pointer; color: var(--error); font-weight: 600;">Delete this project</summary>
+            <form method="POST" action="{{ url_for('project.delete_project', project_id=project.id) }}" style="display:flex;gap:var(--spacing-sm);margin-top:var(--spacing-md);flex-wrap:wrap;" onsubmit="return confirm('Delete this project?');">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input class="input-v2" type="password" name="password" placeholder="Confirm password" required style="flex:1;min-width:220px;">
+                <button type="submit" class="btn" style="background: var(--error); color: white;">Delete Project</button>
+            </form>
+        </details>
+        {% endif %}
+    </article>
+    {% if project.thumbnail %}
+    <img src="{{ project.thumbnail|upload_url('projects') }}" alt="{{ project.title }}" style="width: 100%; border-radius: var(--radius-xl); margin-bottom: var(--spacing-xl);">
+    {% endif %}
+    {% if gallery %}
+    <section class="content-card">
+        <h2 class="card-title" style="margin-bottom: var(--spacing-lg);">Gallery</h2>
+        <div class="feed-grid">
+            {% for image in gallery %}
+            <img src="{{ image.filename|upload_url('projects') }}" alt="{{ image.caption or project.title }}" style="width: 100%; border-radius: var(--radius-lg);">
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    <section class="related-posts">
+        <h2 class="related-posts-title">Related Projects</h2>
+        <div class="feed-grid">
+            {% for item in related_projects %}
+            <article class="project-card" onclick="window.location.href='{{ url_for('project.project_detail', slug=item.slug) }}'">
+                <div class="project-card-content"><h3>{{ item.title }}</h3><p class="project-card-excerpt">{{ item.description[:140] }}</p></div>
+            </article>
+            {% else %}<p style="color: var(--text-muted);">No related projects yet.</p>{% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}
+{% block extra_js %}
+<script>
+    document.querySelector('.project-star-btn')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+            const response = await fetch(`/project/${button.dataset.projectId}/star`, { method: 'POST' });
+            const data = await response.json();
+            button.classList.toggle('active', data.status === 'starred');
+            button.querySelector('span').textContent = data.status === 'starred' ? 'Starred' : 'Star';
+            button.querySelector('.project-star-count').textContent = data.count;
+        } catch (error) {
+            if (window.toast) toast.show('Could not update star.', 'error');
+        } finally {
+            button.disabled = false;
+        }
+    });
+</script>
+{% endblock %}

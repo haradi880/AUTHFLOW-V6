@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Project' if editing else 'Share Project' }} — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Project</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">{{ 'Edit' if editing else 'Share' }}</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('project.projects_feed') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Cancel</a>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;">
+            <div class="card-v2 animate-fade-up">
+                <form method="POST" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--sp-6);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="section-header"><h2 class="section-header__title">Project Details</h2></div>
+                    
+                    <div class="grid-2" style="gap:var(--sp-4);">
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Title</label>
+                            <input class="input-v2" name="title" value="{{ project.title if project else '' }}" required>
+                        </div>
+                        
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Description</label>
+                            <textarea class="input-v2" name="description" rows="4" required>{{ project.description if project else '' }}</textarea>
+                        </div>
+
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Category</label>
+                            <select class="input-v2" name="category_id">
+                                <option value="">Uncategorized</option>
+                                {% for category in categories %}
+                                <option value="{{ category.id }}" {{ 'selected' if project and project.category_id == category.id }}>{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Status</label>
+                            <select class="input-v2" name="status">
+                                <option value="draft" {{ 'selected' if project and project.status == 'draft' }}>Draft</option>
+                                <option value="published" {{ 'selected' if project and project.status == 'published' }}>Published</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">GitHub URL</label>
+                            <input class="input-v2" name="github_url" type="url" value="{{ project.github_url if project else '' }}">
+                        </div>
+
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Live Demo URL</label>
+                            <input class="input-v2" name="demo_url" type="url" value="{{ project.demo_url if project else '' }}">
+                        </div>
+
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Tags (comma separated)</label>
+                            <input class="input-v2" id="tags" name="tags" list="tagSuggestions" value="{{ project.tags|map(attribute='name')|join(', ') if project else '' }}" placeholder="python, flask, ai">
+                            <datalist id="tagSuggestions"></datalist>
+                        </div>
+
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Thumbnail</label>
+                            <input class="input-v2" name="thumbnail" type="file" accept="image/*">
+                        </div>
+
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Gallery Images</label>
+                            <input class="input-v2" name="images" type="file" accept="image/*" multiple>
+                        </div>
+                    </div>
+
+                    {% if editing and gallery %}
+                    <div style="margin-top:var(--sp-4);">
+                        <h3 style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-3);">Current Gallery</h3>
+                        <div class="grid-3">
+                            {% for image in gallery %}
+                            <div style="position:relative;aspect-ratio:16/9;border-radius:var(--r-md);overflow:hidden;">
+                                <img src="{{ image.filename|upload_url('projects') }}" alt="" style="width:100%;height:100%;object-fit:cover;">
+                                <div style="position:absolute;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity var(--dur-fast);" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
+                                    <form method="POST" action="{{ url_for('project.delete_project_image', image_id=image.id) }}" style="margin:0;">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                        <button class="btn-v2 btn-v2--secondary btn-v2--sm" type="submit">Remove</button>
+                                    </form>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div style="display:flex;justify-content:flex-end;margin-top:var(--sp-4);">
+                        <button type="submit" class="btn-v2 btn-v2--primary">{{ 'Save Changes' if editing else 'Create Project' }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const tagInput = document.getElementById('tags');
+    const datalist = document.getElementById('tagSuggestions');
+    if (!tagInput || !datalist) return;
+    tagInput.addEventListener('input', async () => {
+        const current = tagInput.value.split(',').pop().trim();
+        const response = await fetch(`/tags/suggest?q=${encodeURIComponent(current)}`);
+        const tags = await response.json();
+        datalist.innerHTML = tags.map(tag => `<option value="${tag.name}"></option>`).join('');
+    });
+});
+</script>
+{% endblock %}

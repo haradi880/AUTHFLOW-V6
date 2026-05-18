@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Chat with @{{ other_user.username }} — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <a href="{{ url_for('messages.inbox') }}" class="topnav-v2__kicker" style="text-decoration:none;color:inherit;">Messages</a>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">@{{ other_user.username }}</span>
+                </div>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;display:flex;flex-direction:column;height:calc(100vh - var(--topnav-h));padding:var(--sp-4);">
+            <div class="card-v2" style="flex:1;display:flex;flex-direction:column;padding:0;overflow:hidden;">
+                <!-- Header -->
+                <div style="padding:var(--sp-4);background:var(--surface-3);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:var(--sp-3);">
+                    <div class="avatar-v2 avatar-v2--sm">
+                        {% if other_user.avatar and other_user.avatar != 'default.jpg' %}
+                        <img src="{{ other_user.avatar_url }}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">
+                        {% else %}
+                        {{ other_user.username[0]|upper }}
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div style="font-weight:600;color:var(--text-primary);font-size:var(--text-sm);">{{ other_user.full_name or other_user.username }}</div>
+                        <div style="font-size:var(--text-xs);color:var(--success);">Online</div>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div id="chatMessages" style="flex:1;overflow-y:auto;padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);background:var(--surface-2);">
+                    {% for msg in messages %}
+                    <div class="message" data-id="{{ msg.id }}" style="max-width:75%;display:flex;flex-direction:column;gap:4px;{{ 'align-self:flex-end;' if msg.sender_id == current_user.id else 'align-self:flex-start;' }}">
+                        <div style="padding:var(--sp-3) var(--sp-4);border-radius:var(--r-lg);font-size:var(--text-sm);line-height:1.5;{{ 'background:var(--gradient-primary);color:#fff;border-bottom-right-radius:4px;' if msg.sender_id == current_user.id else 'background:var(--surface-3);color:var(--text-primary);border-bottom-left-radius:4px;border:1px solid var(--border-subtle);' }}">
+                            {{ msg.content }}
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;align-items:center;gap:var(--sp-1);font-size:var(--text-2xs);color:var(--text-faint);">
+                            <time class="js-local-time" datetime="{{ msg.created_at.isoformat() }}Z" data-format="time">{{ msg.created_at.strftime('%H:%M') }}</time>
+                            {% if msg.sender_id == current_user.id %}
+                            <span class="message-status">
+                                {% if msg.is_read %}
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15" style="margin-left:-6px;"/></svg>
+                                {% else %}
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                {% endif %}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Input -->
+                <div style="padding:var(--sp-3) var(--sp-4);background:var(--surface-3);border-top:1px solid var(--border-subtle);">
+                    <form id="chatForm" style="display:flex;gap:var(--sp-3);">
+                        <input type="hidden" name="recipient_id" value="{{ other_user.id }}">
+                        <input type="text" class="input-v2" name="content" placeholder="Type a message..." autocomplete="off" required style="flex:1;border-radius:var(--r-full);padding-left:var(--sp-4);">
+                        <button type="submit" class="btn-v2 btn-v2--primary btn-v2--icon" style="border-radius:50%;width:44px;height:44px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const chatMessages = document.getElementById('chatMessages');
+    const chatForm = document.getElementById('chatForm');
+    let lastMessageId = {% if messages %}{{ messages[-1].id }}{% else %}0{% endif %};
+    
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = chatForm.querySelector('input[name="content"]');
+        const content = input.value.trim();
+        if (!content) return;
+        
+        const tempId = 'temp-' + Date.now();
+        const formData = new FormData(chatForm);
+        input.value = '';
+        
+        appendMessage({
+            id: tempId,
+            content: content,
+            created_at: new Date().toISOString(),
+            status: 'sending'
+        }, true);
+        
+        try {
+            const response = await fetch("{{ url_for('messages.send_message') }}", {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+                if (tempMsg) {
+                    tempMsg.querySelector('.message-status').innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+                    tempMsg.setAttribute('data-id', data.message.id);
+                    lastMessageId = Math.max(lastMessageId, data.message.id);
+                }
+            }
+        } catch (error) {
+            const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+            if (tempMsg) tempMsg.style.opacity = '0.5';
+        }
+    });
+    
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value || '';
+        return div.innerHTML;
+    }
+
+    function appendMessage(msg, isSent) {
+        const div = document.createElement('div');
+        div.className = 'message animate-fade-up';
+        div.setAttribute('data-id', msg.id);
+        div.style.cssText = `max-width:75%;display:flex;flex-direction:column;gap:4px;${isSent ? 'align-self:flex-end;' : 'align-self:flex-start;'}`;
+        
+        const styleContent = isSent 
+            ? 'background:var(--gradient-primary);color:#fff;border-bottom-right-radius:4px;'
+            : 'background:var(--surface-3);color:var(--text-primary);border-bottom-left-radius:4px;border:1px solid var(--border-subtle);';
+
+        let statusHtml = '';
+        if (isSent) {
+            statusHtml = `<span class="message-status">${msg.status === 'sending' ? '...' : (msg.is_read ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15" style="margin-left:-6px;"/></svg>' : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>')}</span>`;
+        }
+
+        div.innerHTML = `
+            <div style="padding:var(--sp-3) var(--sp-4);border-radius:var(--r-lg);font-size:var(--text-sm);line-height:1.5;${styleContent}">${escapeHtml(msg.content)}</div>
+            <div style="display:flex;justify-content:flex-end;align-items:center;gap:var(--sp-1);font-size:var(--text-2xs);color:var(--text-faint);">
+                <time class="js-local-time" datetime="${escapeHtml(msg.created_at)}" data-format="time">${formatMessageTime(msg.created_at)}</time>
+                ${statusHtml}
+            </div>
+        `;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    async function checkNewMessages() {
+        try {
+            const cacheBuster = Date.now();
+            const response = await fetch(`{{ url_for('messages.chat', username=other_user.username) }}?last_id=${lastMessageId}&ajax=1&_=${cacheBuster}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.messages && data.messages.length > 0) {
+                    let shouldPlaySound = false;
+                    data.messages.forEach(msg => {
+                        if (!document.querySelector(`[data-id="${msg.id}"]`)) {
+                            if (msg.sender_id != {{ current_user.id }}) {
+                                appendMessage({id: msg.id, content: msg.content, created_at: msg.created_at}, false);
+                                shouldPlaySound = true;
+                            }
+                        }
+                        lastMessageId = Math.max(lastMessageId, msg.id);
+                    });
+                    if (shouldPlaySound && typeof playNotificationSound === 'function') playNotificationSound();
+                }
+            }
+        } catch (e) {}
+    }
+
+    function formatMessageTime(value) {
+        if (window.AuthFlow && typeof window.AuthFlow.formatLocalTime === 'function') {
+            return window.AuthFlow.formatLocalTime(value, 'time');
+        }
+        return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    setInterval(() => {
+        if (document.visibilityState === 'visible') checkNewMessages();
+    }, 1500);
+</script>
+{% endblock %}

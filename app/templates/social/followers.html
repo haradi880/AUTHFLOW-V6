@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }} Followers — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <a href="{{ url_for('main.public_profile', username=user.username) }}" class="topnav-v2__kicker" style="text-decoration:none;color:inherit;">@{{ user.username }}</a>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Followers</span>
+                </div>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;">
+            <div class="card-v2 animate-fade-up" style="padding:0;overflow:hidden;">
+                <div class="section-header" style="padding:var(--sp-5);margin:0;border-bottom:1px solid var(--border-subtle);"><h2 class="section-header__title">Followers</h2></div>
+                
+                <div style="display:flex;flex-direction:column;">
+                    {% for follower in followers %}
+                    <a href="{{ url_for('main.public_profile', username=follower.username) }}" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4);text-decoration:none;border-bottom:1px solid var(--border-subtle);transition:background var(--dur-fast);" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='transparent'">
+                        <div class="avatar-v2 avatar-v2--lg" style="flex-shrink:0;">{{ follower.username[0]|upper }}</div>
+                        <div style="flex:1;">
+                            <div style="font-weight:600;color:var(--text-primary);font-size:var(--text-sm);">{{ follower.full_name or follower.username }}</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ follower.username }}</div>
+                        </div>
+                        <span class="btn-v2 btn-v2--secondary btn-v2--sm">View Profile</span>
+                    </a>
+                    {% else %}
+                    <div class="empty-v2" style="border:none;">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                        <div class="empty-v2__title">No followers yet</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

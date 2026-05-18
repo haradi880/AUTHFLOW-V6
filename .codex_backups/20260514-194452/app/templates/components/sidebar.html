@@ -1,0 +1,175 @@
+<!-- ═══════ SIDEBAR v2 ═══════ -->
+<aside class="sidebar-v2" id="sidebarV2">
+    <div class="sidebar-v2__brand">
+        <div class="sidebar-v2__logo">A</div>
+        <span class="sidebar-v2__brand-text">AuthFlow</span>
+    </div>
+
+    <nav class="sidebar-v2__nav" aria-label="Main navigation">
+        <!-- Main -->
+        <div class="sidebar-v2__section">
+            <div class="sidebar-v2__section-label">Main</div>
+            <a href="/" class="nav-v2 {{ 'active' if request.path == '/' }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Home
+            </a>
+            <a href="{{ url_for('devlogs.index') }}" class="nav-v2 {{ 'active' if request.path.startswith('/devfeed') or request.path.startswith('/devlogs') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                DevFeed
+            </a>
+            <a href="/blogs" class="nav-v2 {{ 'active' if request.path.startswith('/blogs') or request.path.startswith('/blog/') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Blogs
+            </a>
+            <a href="/projects" class="nav-v2 {{ 'active' if request.path.startswith('/projects') or request.path.startswith('/project/') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                Projects
+            </a>
+            <a href="/search" class="nav-v2 {{ 'active' if request.path.startswith('/search') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                Search
+            </a>
+        </div>
+
+        <!-- Ecosystem -->
+        <div class="sidebar-v2__section">
+            <div class="sidebar-v2__section-label">Ecosystem</div>
+            <a href="/hiring" class="nav-v2 {{ 'active' if request.path.startswith('/hiring') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                Hiring
+                <span class="badge-v2 badge-v2--accent" style="margin-left:auto;font-size:.6rem;padding:2px 6px;">NEW</span>
+            </a>
+            <a href="/robotics" class="nav-v2 {{ 'active' if request.path.startswith('/robotics') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></svg>
+                Robotics Hub
+                <span class="badge-v2 badge-v2--accent" style="margin-left:auto;font-size:.6rem;padding:2px 6px;">NEW</span>
+            </a>
+            <a href="/reputation" class="nav-v2 {{ 'active' if request.path.startswith('/reputation') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                Reputation
+            </a>
+        </div>
+
+        {% if session.get('user') %}
+        <!-- Personal -->
+        <div class="sidebar-v2__section">
+            <div class="sidebar-v2__section-label">Personal</div>
+            <a href="/{{ session['user'] }}" class="nav-v2 {{ 'active' if request.path == '/' ~ session['user'] }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Profile
+            </a>
+            <a href="/messages" class="nav-v2 {{ 'active' if request.path.startswith('/messages') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Messages
+                <span class="nav-v2__badge js-message-badge badge-v2 badge-v2--primary" style="{{ 'display:none;' if unread_counts.messages == 0 }}">{{ unread_counts.messages }}</span>
+            </a>
+            <a href="{{ url_for('main.bookmarks') }}" class="nav-v2 {{ 'active' if request.path.startswith('/bookmarks') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                Bookmarks
+            </a>
+            <a href="{{ url_for('main.following_feed') }}" class="nav-v2 {{ 'active' if request.path.startswith('/following') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Following
+            </a>
+            <a href="/notifications" class="nav-v2 {{ 'active' if request.path.startswith('/notifications') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                Notifications
+                <span class="nav-v2__badge js-notification-badge badge-v2 badge-v2--error" style="{{ 'display:none;' if unread_counts.notifications == 0 }}">{{ unread_counts.notifications }}</span>
+            </a>
+        </div>
+
+        <!-- Tools -->
+        <div class="sidebar-v2__section">
+            <div class="sidebar-v2__section-label">Tools</div>
+            <a href="/analyzer" class="nav-v2 {{ 'active' if request.path.startswith('/analyzer') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                AI Analyzer
+            </a>
+            <a href="/settings" class="nav-v2 {{ 'active' if request.path.startswith('/settings') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Settings
+            </a>
+            {% if session.get('is_admin') %}
+            <a href="/admin" class="nav-v2 {{ 'active' if request.path.startswith('/admin') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+                Admin
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Help -->
+        <div class="sidebar-v2__section">
+            <div class="sidebar-v2__section-label">Help</div>
+            <a href="{{ url_for('main.faq') }}" class="nav-v2 {{ 'active' if request.path.startswith('/faq') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.82 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+                FAQ
+            </a>
+            <a href="/support" class="nav-v2 {{ 'active' if request.path.startswith('/support') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                Support
+            </a>
+        </div>
+    </nav>
+
+    <!-- Footer -->
+    <div class="sidebar-v2__footer">
+        {% if session.get('user') %}
+        <a href="/{{ session['user'] }}" class="sidebar-v2__user">
+            <div class="avatar-v2 avatar-v2--sm">{{ session['user'][0] | upper }}</div>
+            <div class="sidebar-v2__user-info">
+                <div class="sidebar-v2__user-name">{{ session['user'] }}</div>
+                <div class="sidebar-v2__user-role">
+                    {% if current_user.is_authenticated %}Lv.{{ current_user.level }} · {{ current_user.xp_total }} XP{% else %}Developer{% endif %}
+                </div>
+            </div>
+        </a>
+        <a href="/logout" class="nav-v2" style="color:var(--error);margin-top:var(--sp-2);">
+            <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Logout
+        </a>
+        {% else %}
+        <a href="/login" class="btn-v2 btn-v2--primary" style="width:100%;">Sign In</a>
+        <a href="/register" class="btn-v2 btn-v2--secondary" style="width:100%;margin-top:var(--sp-2);">Create Account</a>
+        {% endif %}
+    </div>
+</aside>
+<div class="sidebar-overlay-v2" id="sidebarOverlay"></div>
+
+<!-- Mobile Bottom Nav -->
+<nav class="mobile-nav-v2" aria-label="Mobile navigation">
+    <div class="mobile-nav-v2__inner">
+        <a href="/" class="mobile-nav-v2__item {{ 'active' if request.path == '/' }}">
+            <svg class="mobile-nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Home
+        </a>
+        <a href="{{ url_for('devlogs.index') }}" class="mobile-nav-v2__item {{ 'active' if request.path.startswith('/devfeed') or request.path.startswith('/devlogs') }}">
+            <svg class="mobile-nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Feed
+        </a>
+        <a href="/projects" class="mobile-nav-v2__item {{ 'active' if request.path.startswith('/projects') or request.path.startswith('/project/') }}">
+            <svg class="mobile-nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Projects
+        </a>
+        {% if session.get('user') %}
+        <a href="/notifications" class="mobile-nav-v2__item {{ 'active' if request.path.startswith('/notifications') }}">
+            <svg class="mobile-nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Alerts
+            {% if unread_counts.notifications > 0 %}<span class="mobile-nav-v2__dot js-notification-badge"></span>{% endif %}
+        </a>
+        <a href="/{{ session['user'] }}" class="mobile-nav-v2__item {{ 'active' if request.path == '/' ~ session['user'] }}">
+            <svg class="mobile-nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Profile
+        </a>
+        {% else %}
+        <a href="/hiring" class="mobile-nav-v2__item {{ 'active' if request.path.startswith('/hiring') }}">
+            <svg class="mobile-nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            Hiring
+        </a>
+        <a href="/login" class="mobile-nav-v2__item">
+            <svg class="mobile-nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Sign In
+        </a>
+        {% endif %}
+    </div>
+</nav>

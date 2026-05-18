@@ -1,0 +1,15 @@
+<nav class="breadcrumb" aria-label="Breadcrumb" style="margin-bottom: var(--spacing-xl);">
+    <ol style="display: flex; flex-wrap: wrap; gap: var(--spacing-sm); list-style: none; padding: 0; color: var(--text-muted); font-size: 0.875rem;">
+        <li><a href="{{ url_for('main.home') }}" style="color: inherit; text-decoration: none;">Home</a></li>
+        {% for label, href in items|default([]) %}
+        <li>/</li>
+        <li>
+            {% if href %}
+            <a href="{{ href }}" style="color: inherit; text-decoration: none;">{{ label }}</a>
+            {% else %}
+            <span style="color: var(--text-primary);">{{ label }}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+</nav>

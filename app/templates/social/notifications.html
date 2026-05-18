@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Notifications — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__title">Notifications</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                {% if notifications %}
+                <button id="clearNotifications" class="btn-v2 btn-v2--secondary btn-v2--sm" style="color:var(--error);">Clear All</button>
+                {% endif %}
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;">
+            <div class="card-v2 animate-fade-up" style="padding:0;overflow:hidden;">
+                <div class="section-header" style="padding:var(--sp-5);margin:0;border-bottom:1px solid var(--border-subtle);"><h2 class="section-header__title">Recent Activity</h2></div>
+                
+                <div style="display:flex;flex-direction:column;">
+                    {% for notification in notifications %}
+                    <a href="{{ notification.link or url_for('social.notifications') }}" style="display:flex;gap:var(--sp-4);padding:var(--sp-4);text-decoration:none;border-bottom:1px solid var(--border-subtle);transition:background var(--dur-fast);position:relative;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='transparent'">
+                        {% if not notification.is_read %}
+                        <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--primary);"></div>
+                        {% endif %}
+                        
+                        <div style="width:40px;height:40px;border-radius:12px;background:var(--surface-3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            {% if notification.action == 'follow' %}
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                            {% elif notification.action == 'like' %}
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                            {% elif notification.action == 'comment' %}
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                            {% elif notification.action == 'message' %}
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            {% else %}
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            {% endif %}
+                        </div>
+                        
+                        <div style="flex:1;">
+                            <p style="margin:0;font-size:var(--text-sm);color:{{ 'var(--text-primary)' if not notification.is_read else 'var(--text-secondary)' }};line-height:1.5;margin-bottom:var(--sp-1);">{{ notification.message }}</p>
+                            <time class="js-local-time" datetime="{{ notification.created_at.isoformat() }}Z" data-format="datetime" style="font-size:var(--text-xs);color:var(--text-muted);">{{ notification.created_at.strftime('%b %d, %H:%M') }}</time>
+                        </div>
+                    </a>
+                    {% else %}
+                    <div class="empty-v2" style="border:none;">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+                        <div class="empty-v2__title">All caught up!</div>
+                        <div class="empty-v2__desc">No new notifications at the moment.</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+document.getElementById('clearNotifications')?.addEventListener('click', async () => {
+    if (!confirm('Clear all notifications?')) return;
+    try {
+        const response = await fetch("{{ url_for('social.clear_notifications') }}", {
+            method: 'POST',
+            headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+        });
+        if (response.ok) window.location.reload();
+    } catch (e) {}
+});
+</script>
+{% endblock %}
+{% endblock %}

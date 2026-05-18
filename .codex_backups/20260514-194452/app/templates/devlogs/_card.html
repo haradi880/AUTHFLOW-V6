@@ -1,0 +1,88 @@
+<article class="devlog-card" data-devlog-id="{{ devlog.id }}">
+    <header class="devlog-card-header">
+        <a class="devlog-author" href="{{ url_for('main.public_profile', username=devlog.author.username) }}">
+            <span class="devlog-avatar">{{ devlog.author.username[0] | upper }}</span>
+            <span>
+                <strong>{{ devlog.author.full_name or devlog.author.username }}</strong>
+                <small>@{{ devlog.author.username }} · <time class="js-local-time" datetime="{{ devlog.created_at.isoformat() }}Z" data-format="short-date">{{ devlog.created_at.strftime('%b %d') }}</time></small>
+            </span>
+        </a>
+        <div class="devlog-card-flags">
+            {% if devlog.is_pinned %}<span class="devlog-chip">Pinned</span>{% endif %}
+            {% if devlog.milestone %}<span class="devlog-chip milestone">Milestone</span>{% endif %}
+        </div>
+    </header>
+
+    {% if devlog.milestone %}
+    <div class="devlog-milestone">{{ devlog.milestone }}</div>
+    {% endif %}
+
+    <a class="devlog-body-link" href="{{ url_for('devlogs.detail', devlog_id=devlog.id) }}">
+        <p class="devlog-content">{{ devlog.content }}</p>
+    </a>
+
+    {% if devlog.tags %}
+    <div class="devlog-tags">
+        {% for tag in devlog.tags %}
+        <a href="{{ url_for('devlogs.index', sort='latest') }}?tag={{ tag.slug }}">#{{ tag.name }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="devlog-progress">
+        <div class="devlog-progress-top">
+            <span>Build progress</span>
+            <strong>{{ devlog.progress }}%</strong>
+        </div>
+        <div class="devlog-progress-track">
+            <div class="devlog-progress-fill" style="width: {{ devlog.progress }}%;"></div>
+        </div>
+    </div>
+
+    {% set media_items = devlog.media %}
+    {% if media_items %}
+    <div class="devlog-media-grid media-count-{{ media_items|length }}">
+        {% for media in media_items %}
+            {% if media.media_type == 'video' %}
+            <video src="{{ media.url }}" controls preload="metadata"></video>
+            {% else %}
+            <img src="{{ media.url }}" alt="{{ media.alt_text or 'DevLog media' }}" loading="lazy">
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <footer class="devlog-actions">
+        {% if current_user.is_authenticated %}
+        <button type="button" class="devlog-action {{ 'active' if state.liked }}" data-action="like">
+            Like <span data-count="likes">{{ devlog.likes_count }}</span>
+        </button>
+        <button type="button" class="devlog-action {{ 'active' if state.reposted }}" data-action="repost">
+            Repost <span data-count="reposts">{{ devlog.reposts_count }}</span>
+        </button>
+        <button type="button" class="devlog-action {{ 'active' if state.bookmarked }}" data-action="bookmark">
+            Save <span data-count="bookmarks">{{ devlog.bookmarks_count }}</span>
+        </button>
+        <button type="button" class="devlog-action" data-action="comment">
+            Comment <span data-count="comments">{{ devlog.comments_count }}</span>
+        </button>
+        {% if current_user.id == devlog.user_id or current_user.is_admin %}
+        <button type="button" class="devlog-action {{ 'active' if devlog.is_pinned }}" data-action="pin">
+            {{ 'Unpin' if devlog.is_pinned else 'Pin' }}
+        </button>
+        {% endif %}
+        {% else %}
+        <a class="devlog-action" href="{{ url_for('auth.login', next=request.url) }}">Like {{ devlog.likes_count }}</a>
+        <a class="devlog-action" href="{{ url_for('auth.login', next=request.url) }}">Comment {{ devlog.comments_count }}</a>
+        <a class="devlog-action" href="{{ url_for('auth.login', next=request.url) }}">Save</a>
+        {% endif %}
+    </footer>
+
+    {% if current_user.is_authenticated %}
+    <form class="devlog-comment-form" data-role="comment-form">
+        <input type="text" name="content" maxlength="600" placeholder="Add a sharp note..." autocomplete="off">
+        <button type="submit" class="btn btn-primary btn-sm">Send</button>
+    </form>
+    <div class="devlog-inline-comments" data-role="comments"></div>
+    {% endif %}
+</article>

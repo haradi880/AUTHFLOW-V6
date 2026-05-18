@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Messages — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__title">Messages</span>
+                </div>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;">
+            <div class="card-v2 animate-fade-up" style="padding:0;overflow:hidden;">
+                <div class="section-header" style="padding:var(--sp-5);margin:0;border-bottom:1px solid var(--border-subtle);"><h2 class="section-header__title">Conversations</h2></div>
+                
+                <div style="display:flex;flex-direction:column;">
+                    {% for conv in conversations %}
+                    <a href="{{ url_for('messages.chat', username=conv.user.username) }}" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4);text-decoration:none;border-bottom:1px solid var(--border-subtle);transition:background var(--dur-fast);position:relative;" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='transparent'">
+                        {% if conv.unread_count > 0 %}
+                        <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--primary);"></div>
+                        {% endif %}
+                        
+                        <div class="avatar-v2 avatar-v2--lg" style="flex-shrink:0;">
+                            {% if conv.user.avatar and conv.user.avatar != 'default.jpg' %}
+                            <img src="{{ conv.user.avatar_url }}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">
+                            {% else %}
+                            {{ conv.user.username[0]|upper }}
+                            {% endif %}
+                        </div>
+                        
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:var(--sp-1);">
+                                <span style="font-size:var(--text-md);font-weight:600;color:{{ 'var(--text-primary)' if conv.unread_count > 0 else 'var(--text-secondary)' }};">{{ conv.user.full_name or conv.user.username }}</span>
+                                {% if conv.last_message %}
+                                <time class="js-local-time" datetime="{{ conv.last_message.created_at.isoformat() }}Z" data-format="short-date" style="font-size:var(--text-xs);color:var(--text-muted);">{{ conv.last_message.created_at.strftime('%b %d') }}</time>
+                                {% endif %}
+                            </div>
+                            <div style="font-size:var(--text-sm);color:{{ 'var(--text-primary)' if conv.unread_count > 0 else 'var(--text-muted)' }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                {% if conv.last_message and conv.last_message.sender_id == current_user.id %}You: {% endif %}
+                                {{ conv.last_message.content if conv.last_message else 'No messages yet' }}
+                            </div>
+                        </div>
+                        
+                        {% if conv.unread_count > 0 %}
+                        <div style="background:var(--primary);color:#fff;font-size:var(--text-2xs);font-weight:700;padding:2px 6px;border-radius:10px;">{{ conv.unread_count }}</div>
+                        {% endif %}
+                    </a>
+                    {% else %}
+                    <div class="empty-v2" style="border:none;">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+                        <div class="empty-v2__title">No conversations yet</div>
+                        <div class="empty-v2__desc">When you message someone, they'll show up here.</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

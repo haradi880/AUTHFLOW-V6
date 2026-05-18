@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Post a Job - AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Hiring</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Post Job</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('hiring.index') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Cancel</a>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:900px;">
+            <div class="card-v2 animate-fade-up">
+                <form method="POST" style="display:flex;flex-direction:column;gap:var(--sp-6);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="section-header"><h2 class="section-header__title">Job Details</h2></div>
+                    <div class="grid-2" style="gap:var(--sp-4);">
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Job Title</label>
+                            <input class="input-v2" name="title" maxlength="200" required placeholder="Robotics Software Engineer">
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Description</label>
+                            <textarea class="input-v2" name="description" rows="7" required placeholder="Responsibilities, requirements, interview process, and what the person will build."></textarea>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Category</label>
+                            <select class="input-v2" name="category">
+                                {% for category in categories %}
+                                <option value="{{ category }}">{{ category|replace('-',' ')|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Job Type</label>
+                            <select class="input-v2" name="job_type">
+                                {% for job_type in job_types %}
+                                <option value="{{ job_type }}">{{ job_type|replace('-',' ')|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Work Mode</label>
+                            <select class="input-v2" name="work_mode">
+                                {% for mode in work_modes %}
+                                <option value="{{ mode }}">{{ mode|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Experience Level</label>
+                            <select class="input-v2" name="experience_level">
+                                {% for level in experience_levels %}
+                                <option value="{{ level }}">{{ level|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Location</label>
+                            <input class="input-v2" name="location" placeholder="Remote, Bengaluru, San Francisco...">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Status</label>
+                            <select class="input-v2" name="status">
+                                <option value="active">Active</option>
+                                <option value="draft">Draft</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Salary Min</label>
+                            <input class="input-v2" name="salary_min" type="number" min="0" step="1000" placeholder="60000">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Salary Max</label>
+                            <input class="input-v2" name="salary_max" type="number" min="0" step="1000" placeholder="120000">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Currency</label>
+                            <input class="input-v2" name="salary_currency" maxlength="10" value="USD">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Required Skills</label>
+                            <input class="input-v2" name="skills_required" placeholder="python, ros, embedded, c++">
+                        </div>
+                    </div>
+
+                    <hr class="divider-v2">
+                    <div class="section-header"><h2 class="section-header__title">Company</h2></div>
+                    <div class="grid-2" style="gap:var(--sp-4);">
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Company Name</label>
+                            <input class="input-v2" name="company_name" required maxlength="200">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Company Website</label>
+                            <input class="input-v2" name="company_website" type="url" placeholder="https://...">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Company Location</label>
+                            <input class="input-v2" name="company_location">
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Company Description</label>
+                            <textarea class="input-v2" name="company_description" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:var(--sp-3);padding-top:var(--sp-4);border-top:1px solid var(--border-subtle);">
+                        <a href="{{ url_for('hiring.index') }}" class="btn-v2 btn-v2--secondary">Cancel</a>
+                        <button type="submit" class="btn-v2 btn-v2--primary">Post Job</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

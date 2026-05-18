@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}AI Portfolio Analyzer — AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Tools</span><span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">AI Portfolio Analyzer</span>
+                </div>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <section class="hero-v2 animate-fade-up" style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(99,102,241,.1),rgba(59,130,246,.06));">
+                <div class="hero-v2__eyebrow">🧠 AI-Powered Analysis</div>
+                <h1 class="hero-v2__title">Understand your portfolio's strengths.</h1>
+                <p class="hero-v2__desc">Get multi-dimensional scores, improvement suggestions, and a hiring readiness assessment.</p>
+                <div class="hero-v2__actions">
+                    <button id="runAnalysis" class="btn-v2 btn-v2--primary btn-v2--lg" onclick="runAnalysis()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        {{ 'Re-analyze Portfolio' if analysis else 'Analyze My Portfolio' }}
+                    </button>
+                </div>
+            </section>
+
+            {% if analysis %}
+            <!-- Overall Score -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div style="display:flex;align-items:center;gap:var(--sp-8);flex-wrap:wrap;">
+                    <div style="text-align:center;">
+                        <div class="score-circle" style="--size:120px;--pct:{{ analysis.overall_score }};">
+                            <svg viewBox="0 0 100 100"><circle class="score-circle__track" cx="50" cy="50" r="40"/><circle class="score-circle__fill" cx="50" cy="50" r="40"/></svg>
+                            <span class="score-circle__label" style="font-size:var(--text-2xl);">{{ analysis.overall_score }}</span>
+                        </div>
+                        <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);margin-top:var(--sp-3);">Overall Score</div>
+                    </div>
+                    <div style="flex:1;min-width:280px;">
+                        <h2 style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:700;margin-bottom:var(--sp-4);">
+                            {% if analysis.overall_score >= 80 %}Excellent Portfolio 🚀
+                            {% elif analysis.overall_score >= 60 %}Strong Portfolio 💪
+                            {% elif analysis.overall_score >= 40 %}Growing Portfolio 🌱
+                            {% else %}Getting Started 🎯{% endif %}
+                        </h2>
+                        <div style="font-size:var(--text-xs);color:var(--text-muted);">Last analyzed: {{ analysis.analyzed_at.strftime('%b %d, %Y at %H:%M') }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Score Breakdown -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Score Breakdown</h2></div>
+                <div class="grid-3 stagger">
+                    {% for label, value, color in [
+                        ('Portfolio Strength', analysis.portfolio_strength, 'primary'),
+                        ('Hiring Readiness', analysis.hiring_readiness, 'success'),
+                        ('Project Depth', analysis.project_depth, 'accent'),
+                        ('Frontend', analysis.frontend_score, 'info'),
+                        ('Backend', analysis.backend_score, 'warning'),
+                        ('Writing Quality', analysis.writing_quality, 'primary'),
+                        ('AI / ML', analysis.ai_ml_score, 'accent'),
+                        ('Robotics', analysis.robotics_score, 'success'),
+                        ('Open Source', analysis.open_source_score, 'info'),
+                    ] %}
+                    <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:var(--text-sm);color:var(--text-secondary);">{{ label }}</span>
+                            <span style="font-family:var(--font-display);font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">{{ value }}/100</span>
+                        </div>
+                        <div class="progress-v2"><div class="progress-v2__fill progress-v2--{{ color if color != 'primary' else '' }}" style="width:{{ value }}%;{% if color == 'success' %}background:var(--success);{% elif color == 'warning' %}background:var(--warning);{% elif color == 'accent' %}background:var(--grad-accent);{% elif color == 'info' %}background:var(--info);{% endif %}"></div></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Strengths & Suggestions -->
+            <div class="grid-2" style="margin-bottom:var(--sp-6);">
+                <div class="card-v2 animate-fade-up">
+                    <div class="section-header"><h2 class="section-header__title">💪 Strengths</h2></div>
+                    {% for s in (analysis.strengths|default('[]',true))|tojson|default('[]',true) %}{% endfor %}
+                    <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
+                        {% for item in analysis.strengths|default('[]',true) %}
+                        {% if item is string %}
+                        <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--success-muted);border-radius:var(--r-lg);">
+                            <span style="color:var(--success);font-size:var(--text-md);">✓</span>
+                            <span style="font-size:var(--text-sm);color:var(--text-primary);">{{ item }}</span>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="card-v2 animate-fade-up">
+                    <div class="section-header"><h2 class="section-header__title">🎯 Suggestions</h2></div>
+                    <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
+                        {% for item in analysis.suggestions|default('[]',true) %}
+                        {% if item is string %}
+                        <div style="display:flex;align-items:flex-start;gap:var(--sp-3);padding:var(--sp-3);background:var(--primary-muted);border-radius:var(--r-lg);">
+                            <span style="color:var(--primary-hover);font-size:var(--text-md);">→</span>
+                            <span style="font-size:var(--text-sm);color:var(--text-primary);">{{ item }}</span>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            {% else %}
+            <div class="card-v2 animate-fade-up">
+                <div class="empty-v2">
+                    <div class="empty-v2__icon" style="font-size:2.5rem;">🧠</div>
+                    <div class="empty-v2__title">No analysis yet</div>
+                    <div class="empty-v2__desc">Click "Analyze My Portfolio" to get your personalized scores and recommendations.</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script>
+async function runAnalysis() {
+    const btn = document.getElementById('runAnalysis');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Analyzing...';
+    try {
+        const res = await fetch('/analyzer/run', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            window.location.reload();
+        }
+    } catch (e) {
+        btn.innerHTML = 'Error — Try Again';
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

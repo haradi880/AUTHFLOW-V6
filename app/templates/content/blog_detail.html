@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}{{ blog.title }} — AuthFlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+{% endblock %}
+
+{% block meta %}
+<meta name="description" content="{{ blog.excerpt }}">
+<meta property="og:title" content="{{ blog.title }}">
+<meta property="og:description" content="{{ blog.excerpt }}">
+<meta property="og:type" content="article">
+<meta property="article:author" content="{{ blog.author }}">
+<meta property="article:published_time" content="{{ blog.created_at }}">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="{{ request.url }}">
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "{{ blog.title }}",
+    "author": {
+        "@type": "Person",
+        "name": "{{ blog.author }}"
+    },
+    "datePublished": "{{ blog.created_at }}",
+    "description": "{{ blog.excerpt }}"
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker"><a href="/blogs" style="color:inherit;text-decoration:none;">Blogs</a></span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">{{ blog.title[:30] }}...</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                {% if current_user.is_authenticated and (current_user.id == blog.user_id or current_user.is_admin) %}
+                <a href="{{ url_for('blog.edit_blog', blog_id=blog.id) }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Edit</a>
+                {% endif %}
+                <button class="btn-v2 btn-v2--icon {{ 'btn-v2--primary' if is_bookmarked else 'btn-v2--secondary' }}" onclick="toggleBlogBookmark({{ blog.id }}, this)" aria-label="Save bookmark">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="{{ 'currentColor' if is_bookmarked else 'none' }}" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                </button>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;">
+            <article class="card-v2 animate-fade-up" style="padding:var(--sp-8);margin-bottom:var(--sp-6);">
+                <!-- Header -->
+                <header style="margin-bottom:var(--sp-8);">
+                    <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4);">
+                        {% if blog.category %}
+                        <a href="{{ url_for('blog.blogs_feed', category=blog.category.slug) }}" class="badge-v2 badge-v2--primary" style="text-decoration:none;">{{ blog.category }}</a>
+                        {% endif %}
+                        <span style="font-size:var(--text-sm);color:var(--text-muted);display:flex;align-items:center;gap:var(--sp-1);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            {{ blog.reading_time }} min read
+                        </span>
+                        <time datetime="{{ blog.created_at }}" style="font-size:var(--text-sm);color:var(--text-muted);">{{ blog.created_at }}</time>
+                    </div>
+
+                    <h1 style="font-family:var(--font-display);font-size:var(--text-4xl);font-weight:700;color:var(--text-primary);line-height:1.2;margin-bottom:var(--sp-4);">{{ blog.title }}</h1>
+                    <p style="font-size:var(--text-xl);color:var(--text-secondary);line-height:1.5;">{{ blog.excerpt }}</p>
+                </header>
+
+                <!-- Author block -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--sp-4);background:var(--surface-3);border-radius:var(--r-xl);margin-bottom:var(--sp-8);">
+                    <a href="{{ url_for('main.public_profile', username=blog.author.username) }}" style="display:flex;align-items:center;gap:var(--sp-3);text-decoration:none;color:inherit;">
+                        <div class="avatar-v2 avatar-v2--md">{{ blog.author.username[0]|upper }}</div>
+                        <div>
+                            <div style="font-weight:600;color:var(--text-primary);font-size:var(--text-base);">{{ blog.author.full_name or blog.author.username }}</div>
+                            <div style="font-size:var(--text-sm);color:var(--text-muted);">@{{ blog.author.username }}</div>
+                        </div>
+                    </a>
+                    {% if current_user.is_authenticated and current_user.id != blog.author.id %}
+                    <button class="btn-v2 follow-btn {{ 'btn-v2--secondary' if is_following_author else 'btn-v2--primary' }}" data-username="{{ blog.author.username }}">
+                        {{ 'Following' if is_following_author else 'Follow' }}
+                    </button>
+                    {% endif %}
+                </div>
+
+                <!-- Content -->
+                <div class="blog-content" style="font-size:var(--text-lg);line-height:1.8;color:var(--text-secondary);">
+                    {{ blog.content | safe }}
+                </div>
+
+                {% if current_user.is_authenticated and current_user.id == blog.user_id %}
+                <details style="margin-top:var(--sp-6);padding:var(--sp-4);border:1px solid var(--border-subtle);border-radius:var(--r-lg);">
+                    <summary style="cursor:pointer;color:var(--error);font-weight:600;">Delete this blog</summary>
+                    <form method="POST" action="{{ url_for('blog.delete_blog', blog_id=blog.id) }}" style="display:flex;gap:var(--sp-3);margin-top:var(--sp-4);flex-wrap:wrap;" onsubmit="return confirm('Delete this blog post?');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <input class="input-v2" type="password" name="password" placeholder="Confirm password" required style="flex:1;min-width:220px;">
+                        <button type="submit" class="btn-v2 btn-v2--secondary">Delete Blog</button>
+                    </form>
+                </details>
+                {% endif %}
+
+                <!-- Tags & Actions -->
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-4);margin-top:var(--sp-8);padding-top:var(--sp-6);border-top:1px solid var(--border-subtle);">
+                    <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
+                        {% for tag in blog.tags %}
+                        <a href="{{ url_for('blog.blogs_feed', tag=tag.slug) }}" class="tag-v2" style="text-decoration:none;">#{{ tag.name }}</a>
+                        {% endfor %}
+                    </div>
+
+                    <div style="display:flex;gap:var(--sp-3);">
+                        <button class="btn-v2 {{ 'btn-v2--primary' if is_liked else 'btn-v2--secondary' }}" onclick="toggleBlogLike({{ blog.id }}, this)" style="gap:var(--sp-2);">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="{{ 'currentColor' if is_liked else 'none' }}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                            <span>{{ blog.likes_count }}</span>
+                        </button>
+                        <button class="btn-v2 btn-v2--secondary btn-v2--icon share-btn" aria-label="Copy link">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Comments -->
+            <section class="card-v2" style="margin-bottom:var(--sp-8);">
+                <div class="section-header"><h2 class="section-header__title">Comments ({{ comments|length }})</h2></div>
+                
+                {% if session.get('user') %}
+                <form method="POST" action="{{ url_for('blog.add_comment', blog_id=blog.id) }}" style="display:flex;flex-direction:column;gap:var(--sp-3);margin-bottom:var(--sp-6);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <textarea name="content" class="input-v2" rows="3" placeholder="Join the discussion..." required></textarea>
+                    <div style="display:flex;justify-content:flex-end;">
+                        <button type="submit" class="btn-v2 btn-v2--primary">Post Comment</button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="empty-v2" style="margin-bottom:var(--sp-6);">
+                    <p style="color:var(--text-muted);margin-bottom:var(--sp-4);">Sign in to join the discussion.</p>
+                    <a href="/login" class="btn-v2 btn-v2--primary">Sign In</a>
+                </div>
+                {% endif %}
+
+                <div style="display:flex;flex-direction:column;gap:var(--sp-4);">
+                    {% for comment in comments %}
+                    <div style="display:flex;gap:var(--sp-3);padding-bottom:var(--sp-4);border-bottom:1px solid var(--border-subtle);">
+                        <div class="avatar-v2 avatar-v2--sm" style="flex-shrink:0;">{{ comment.author.username[0]|upper }}</div>
+                        <div style="flex:1;">
+                            <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-1);">
+                                <span style="font-weight:600;font-size:var(--text-sm);color:var(--text-primary);">{{ comment.author.full_name or comment.author.username }}</span>
+                                <span style="font-size:var(--text-xs);color:var(--text-muted);">{{ comment.created_at }}</span>
+                            </div>
+                            <p style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.5;">{{ comment.content }}</p>
+                            {% if current_user.is_authenticated and (current_user.id == comment.user_id or current_user.id == blog.user_id or current_user.is_admin) %}
+                            <form method="POST" action="{{ url_for('blog.delete_comment', comment_id=comment.id) }}" style="margin-top:var(--sp-2);" onsubmit="return confirm('Delete this comment?');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" style="background:none;border:0;color:var(--error);font-size:var(--text-xs);cursor:pointer;padding:0;">Delete</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="empty-v2" style="border:none;padding:0;"><div class="empty-v2__title">No comments yet</div></div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <!-- Related Posts -->
+            {% if related_posts %}
+            <section>
+                <div class="section-header"><h2 class="section-header__title">Related Reading</h2></div>
+                <div class="grid-2 stagger">
+                    {% for post in related_posts %}
+                    {% include 'components/blog_card.html' %}
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/blog.js') }}"></script>
+<script>
+    document.querySelectorAll('.share-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(window.location.href);
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+                setTimeout(() => btn.innerHTML = originalHTML, 2000);
+            } catch(e) { console.error('Failed to copy'); }
+        });
+    });
+</script>
+{% endblock %}

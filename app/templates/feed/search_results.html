@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Search — AuthFlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/feed.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__title">Search Results</span>
+                </div>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <form method="GET" style="display:flex;align-items:center;gap:var(--sp-3);">
+                    <div style="flex:1;position:relative;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--text-muted);"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        <input type="text" class="input-v2" name="q" value="{{ query }}" placeholder="Search blogs, projects, and creators..." style="padding-left:44px;font-size:var(--text-lg);height:56px;" autofocus>
+                    </div>
+                    <button type="submit" class="btn-v2 btn-v2--primary" style="height:56px;padding:0 var(--sp-6);">Search</button>
+                </form>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-6);">
+                <h1 style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:600;color:var(--text-primary);">
+                    {% if query %}Results for <span style="color:var(--primary-hover);">"{{ query }}"</span>{% else %}All content{% endif %}
+                </h1>
+                <span class="badge-v2 badge-v2--secondary">{{ total_results }} result{{ 's' if total_results != 1 }}</span>
+            </div>
+
+            <div class="grid-2 stagger" style="align-items:start;">
+                <!-- Left Column -->
+                <div style="display:flex;flex-direction:column;gap:var(--sp-6);">
+                    <div class="card-v2">
+                        <div class="section-header"><h2 class="section-header__title">Blogs</h2></div>
+                        <div style="display:flex;flex-direction:column;gap:var(--sp-4);">
+                            {% for blog in blogs %}
+                            {% include 'components/blog_card.html' %}
+                            {% else %}
+                            <div class="empty-v2"><div class="empty-v2__title">No blogs found</div></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div style="display:flex;flex-direction:column;gap:var(--sp-6);">
+                    <div class="card-v2">
+                        <div class="section-header"><h2 class="section-header__title">Projects</h2></div>
+                        <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
+                            {% for project in projects %}
+                            <a href="{{ url_for('project.project_detail', slug=project.slug) }}" style="display:flex;gap:var(--sp-4);padding:var(--sp-3);border-radius:var(--r-lg);background:var(--surface-3);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='var(--surface-4)'" onmouseout="this.style.background='var(--surface-3)'">
+                                {% if project.thumbnail %}
+                                <img src="{{ project.thumbnail|upload_url('projects') }}" alt="" style="width:80px;height:60px;object-fit:cover;border-radius:var(--r-md);flex-shrink:0;">
+                                {% else %}
+                                <div style="width:80px;height:60px;border-radius:var(--r-md);background:var(--surface-1);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">🚀</div>
+                                {% endif %}
+                                <div style="min-width:0;">
+                                    <h3 style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);margin-bottom:var(--sp-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ project.title }}</h3>
+                                    <p style="font-size:var(--text-xs);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ project.description }}</p>
+                                </div>
+                            </a>
+                            {% else %}
+                            <div class="empty-v2"><div class="empty-v2__title">No projects found</div></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="card-v2">
+                        <div class="section-header"><h2 class="section-header__title">Creators</h2></div>
+                        <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
+                            {% for user in users %}
+                            <a href="{{ url_for('main.public_profile', username=user.username) }}" style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
+                                <div class="avatar-v2 avatar-v2--sm">{{ user.username[0]|upper }}</div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</div>
+                                    <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ user.username }}</div>
+                                </div>
+                                <span class="badge-v2 badge-v2--info">Lv.{{ user.level }}</span>
+                            </a>
+                            {% else %}
+                            <div class="empty-v2"><div class="empty-v2__title">No creators found</div></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

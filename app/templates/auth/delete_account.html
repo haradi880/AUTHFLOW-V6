@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Account - AuthFlow{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">Delete Your Account</h4>
+                </div>
+                
+                <div class="card-body p-5">
+                    <div class="alert alert-danger" role="alert">
+                        <strong>⚠️ Warning!</strong> Account deletion is permanent and irreversible.
+                    </div>
+                    
+                    <h5 class="mb-3">Before you go:</h5>
+                    
+                    <ul class="mb-4">
+                        <li><strong>Your account will be permanently deleted.</strong></li>
+                        <li><strong>All your blogs, projects, and devlogs will be archived</strong> but will be deleted after 30 days.</li>
+                        <li><strong>Your uploaded files will be removed.</strong></li>
+                        <li><strong>Your profile will no longer be visible</strong> to other users.</li>
+                        <li><strong>You will not be able to recover this account.</strong></li>
+                    </ul>
+                    
+                    <form method="POST" novalidate id="deleteForm">
+                        {{ csrf_token() }}
+                        
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Confirm Your Password</label>
+                            <input 
+                                type="password" 
+                                class="form-control" 
+                                id="password" 
+                                name="password"
+                                placeholder="Enter your password"
+                                required
+                                autofocus
+                            >
+                            <small class="form-text text-muted">
+                                Your password is required to delete your account.
+                            </small>
+                        </div>
+                        
+                        <div class="mb-4 form-check">
+                            <input 
+                                type="checkbox" 
+                                class="form-check-input" 
+                                id="confirm_delete" 
+                                name="confirm_delete"
+                                required
+                            >
+                            <label class="form-check-label" for="confirm_delete">
+                                I understand this action is permanent and I want to delete my account
+                            </label>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button 
+                                type="submit" 
+                                class="btn btn-danger btn-lg"
+                                onclick="return confirm('Are you absolutely sure? This cannot be undone.');"
+                            >
+                                Delete My Account
+                            </button>
+                            <a href="{{ url_for('main.home') }}" class="btn btn-secondary">
+                                Cancel & Go Back
+                            </a>
+                        </div>
+                    </form>
+                    
+                    <hr class="my-4">
+                    
+                    <h6 class="mb-2">Need help?</h6>
+                    <p class="small text-muted">
+                        If you have questions or need to recover data before deletion,
+                        please <a href="#support">contact our support team</a>.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('deleteForm').addEventListener('submit', function(e) {
+    const checkbox = document.getElementById('confirm_delete').checked;
+    if (!checkbox) {
+        e.preventDefault();
+        alert('Please confirm that you understand this action is permanent.');
+        return false;
+    }
+});
+</script>
+{% endblock %}

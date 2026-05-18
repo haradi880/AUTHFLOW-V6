@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}{{ profile.username }} - AuthFlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
+{% block meta %}
+<meta name="description" content="{{ profile.bio }}">
+<meta property="og:title" content="{{ profile.username }}'s Profile">
+<meta property="og:description" content="{{ profile.bio }}">
+<meta property="og:type" content="profile">
+<meta property="profile:username" content="{{ profile.username }}">
+<link rel="canonical" href="{{ request.url }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker"><a href="/" style="color:inherit;text-decoration:none;">Home</a></span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">@{{ profile.username }}</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                {% if session.get('user') == profile.username %}
+                <a href="{{ url_for('main.edit_profile') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Edit Profile</a>
+                {% endif %}
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:1000px;padding-top:0;">
+            <div style="height:200px;border-radius:0 0 var(--r-2xl) var(--r-2xl);background:{% if profile.banner_url %}url('{{ profile.banner_url }}') center/cover{% else %}var(--surface-3){% endif %};margin-bottom:calc(var(--sp-8) * -1);position:relative;">
+                <div style="position:absolute;inset:0;background:linear-gradient(to top, var(--bg-body), transparent);border-radius:inherit;"></div>
+            </div>
+
+            <div style="position:relative;padding:0 var(--sp-6) var(--sp-6);display:flex;flex-direction:column;gap:var(--sp-4);">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:var(--sp-4);">
+                    <div style="display:flex;align-items:flex-end;gap:var(--sp-5);">
+                        <div class="avatar-v2" style="width:120px;height:120px;font-size:3rem;border:4px solid var(--bg-body);background:var(--surface-4);color:var(--text-muted);border-radius:var(--r-2xl);">
+                            {% if profile.avatar_url %}
+                            <img src="{{ profile.avatar_url }}" alt="{{ profile.username }}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">
+                            {% else %}
+                            {{ profile.username[0]|upper }}
+                            {% endif %}
+                        </div>
+                        <div style="padding-bottom:var(--sp-2);">
+                            <h1 style="font-family:var(--font-display);font-size:var(--text-3xl);font-weight:700;color:var(--text-primary);line-height:1.2;">{{ profile.full_name or profile.username }}</h1>
+                            <div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;">
+                                <span style="font-size:var(--text-lg);color:var(--text-secondary);">@{{ profile.username }}</span>
+                                {% if profile.is_verified %}<span class="badge-v2 badge-v2--primary">Verified</span>{% endif %}
+                                <span class="badge-v2 badge-v2--info">Lv.{{ profile.xp.level }}</span>
+                                {% if profile.open_to_work %}<span class="badge-v2 badge-v2--success">Open to Work</span>{% endif %}
+                                {% if profile.is_recruiter %}<span class="badge-v2 badge-v2--accent">Hiring</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:var(--sp-3);padding-bottom:var(--sp-2);">
+                        {% if session.get('user') and session['user'] != profile.username %}
+                        <button class="btn-v2 follow-btn {{ 'btn-v2--secondary' if is_following else 'btn-v2--primary' }}" data-username="{{ profile.username }}">
+                            {{ 'Following' if is_following else 'Follow' }}
+                        </button>
+                        <a href="{{ url_for('messages.chat', username=profile.username) }}" class="btn-v2 btn-v2--secondary">Message</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div style="max-width:700px;">
+                    {% if profile.headline %}<p style="font-size:var(--text-md);font-weight:500;color:var(--text-primary);margin-bottom:var(--sp-2);">{{ profile.headline }}</p>{% endif %}
+                    <p style="font-size:var(--text-base);color:var(--text-secondary);line-height:1.6;margin-bottom:var(--sp-4);">{{ profile.bio or "This user hasn't written a bio yet." }}</p>
+
+                    <div style="display:flex;gap:var(--sp-4);flex-wrap:wrap;font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--sp-4);">
+                        {% if profile.location %}<span>{{ profile.location }}</span>{% endif %}
+                        {% if profile.website %}<a href="{{ profile.website }}" target="_blank" rel="noopener" style="color:var(--primary-hover);text-decoration:none;">{{ profile.website|replace('https://','')|replace('http://','') }}</a>{% endif %}
+                        {% if profile.job_title %}<span>{{ profile.job_title }}</span>{% endif %}
+                        {% if profile.preferred_work_type %}<span>{{ profile.preferred_work_type|title }}</span>{% endif %}
+                        {% if profile.years_experience is not none %}<span>{{ profile.years_experience }} yrs exp</span>{% endif %}
+                        <span>Joined {{ profile.joined_date }}</span>
+                    </div>
+
+                    {% if profile.skills %}
+                    <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
+                        {% for skill in profile.skills %}<span class="tag-v2">{{ skill }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if profile.robotics_specialties %}
+                    <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:var(--sp-3);">
+                        {% for specialty in profile.robotics_specialties %}<span class="tag-v2">{{ specialty }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="grid-4" style="margin-bottom:var(--sp-6);">
+                <a href="/{{ profile.username }}/followers" class="stat-v2 hover-lift" style="text-decoration:none;"><div class="stat-v2__label">Followers</div><div class="stat-v2__value">{{ profile.followers_count }}</div></a>
+                <a href="/{{ profile.username }}/following" class="stat-v2 hover-lift" style="text-decoration:none;"><div class="stat-v2__label">Following</div><div class="stat-v2__value">{{ profile.following_count }}</div></a>
+                <div class="stat-v2"><div class="stat-v2__label">Total XP</div><div class="stat-v2__value">{{ profile.xp.total }}</div></div>
+                <div class="stat-v2"><div class="stat-v2__label">Profile Views</div><div class="stat-v2__value">{{ profile.profile_views }}</div></div>
+            </div>
+
+            <div style="display:flex;gap:var(--sp-6);border-bottom:1px solid var(--border-subtle);margin-bottom:var(--sp-6);overflow-x:auto;">
+                <button class="profile-tab active" data-target="projects" style="background:none;border:none;padding:var(--sp-3) 0;font-size:var(--text-sm);font-weight:600;color:var(--text-primary);border-bottom:2px solid var(--primary);cursor:pointer;white-space:nowrap;">Projects ({{ projects|length }})</button>
+                <button class="profile-tab" data-target="blogs" style="background:none;border:none;padding:var(--sp-3) 0;font-size:var(--text-sm);font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;">Blogs ({{ blogs|length }})</button>
+                <button class="profile-tab" data-target="robotics" style="background:none;border:none;padding:var(--sp-3) 0;font-size:var(--text-sm);font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;">Robotics ({{ robotics_projects|length }})</button>
+                <button class="profile-tab" data-target="hiring" style="background:none;border:none;padding:var(--sp-3) 0;font-size:var(--text-sm);font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;">Hiring ({{ posted_jobs|length }})</button>
+                <button class="profile-tab" data-target="activity" style="background:none;border:none;padding:var(--sp-3) 0;font-size:var(--text-sm);font-weight:500;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;">Activity</button>
+            </div>
+
+            <div id="projects-content" class="tab-pane">
+                <div class="grid-2 stagger">
+                    {% for project in projects %}
+                    <article class="card-v2 hover-lift" style="padding:0;cursor:pointer;display:flex;flex-direction:column;" onclick="window.location.href='/project/{{ project.slug }}'">
+                        {% if project.thumbnail %}
+                        <div style="aspect-ratio:16/9;overflow:hidden;border-radius:var(--r-xl) var(--r-xl) 0 0;">
+                            <img src="{{ project.thumbnail|upload_url('projects') }}" alt="{{ project.title }}" loading="lazy" style="width:100%;height:100%;object-fit:cover;">
+                        </div>
+                        {% endif %}
+                        <div style="padding:var(--sp-4);flex:1;display:flex;flex-direction:column;">
+                            <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);margin-bottom:var(--sp-2);">{{ project.title }}</h3>
+                            <p style="font-size:var(--text-sm);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:var(--sp-3);">{{ project.description }}</p>
+                            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:auto;">
+                                {% for tech in project.tech_stack[:3] %}<span class="tag-v2">{{ tech }}</span>{% endfor %}
+                            </div>
+                        </div>
+                    </article>
+                    {% else %}
+                    <div class="empty-v2" style="grid-column:1/-1;"><div class="empty-v2__title">No projects yet</div></div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div id="blogs-content" class="tab-pane" style="display:none;">
+                <div class="stagger" style="display:flex;flex-direction:column;gap:var(--sp-4);">
+                    {% for blog in blogs %}
+                    {% include 'components/blog_card.html' %}
+                    {% else %}
+                    <div class="empty-v2"><div class="empty-v2__title">No blogs yet</div></div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div id="robotics-content" class="tab-pane" style="display:none;">
+                <div class="grid-2 stagger">
+                    {% for item in robotics_projects %}
+                    <article class="card-v2 hover-lift" style="padding:var(--sp-4);cursor:pointer;" onclick="window.location.href='{{ url_for('robotics.project_detail', slug=item.slug) }}'">
+                        <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-3);">
+                            <span class="badge-v2 badge-v2--info">{{ item.project_type|upper }}</span>
+                            <span class="badge-v2 badge-v2--warning">{{ item.difficulty|title }}</span>
+                        </div>
+                        <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);margin-bottom:var(--sp-2);">{{ item.title }}</h3>
+                        <p style="font-size:var(--text-sm);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ item.description }}</p>
+                    </article>
+                    {% else %}
+                    <div class="empty-v2" style="grid-column:1/-1;">
+                        <div class="empty-v2__title">No robotics projects yet</div>
+                        {% if session.get('user') == profile.username %}
+                        <a href="{{ url_for('robotics.upload_project') }}" class="btn-v2 btn-v2--primary btn-v2--sm" style="margin-top:var(--sp-4);">Upload Robotics Project</a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div id="hiring-content" class="tab-pane" style="display:none;">
+                <div class="stagger" style="display:flex;flex-direction:column;gap:var(--sp-4);">
+                    {% for job in posted_jobs %}
+                    <a href="{{ url_for('hiring.job_detail', slug=job.slug) }}" class="card-v2 hover-lift" style="display:block;text-decoration:none;padding:var(--sp-4);">
+                        <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-2);">
+                            <span class="badge-v2 badge-v2--primary">{{ job.job_type|replace('-',' ')|title }}</span>
+                            <span class="badge-v2 badge-v2--info">{{ job.work_mode|title }}</span>
+                            <span class="badge-v2 badge-v2--accent">{{ job.category|replace('-',' ')|title }}</span>
+                        </div>
+                        <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);margin-bottom:var(--sp-1);">{{ job.title }}</h3>
+                        <p style="font-size:var(--text-sm);color:var(--text-muted);">{{ job.company.name if job.company else 'Company' }} - {{ job.location or 'Remote' }}</p>
+                    </a>
+                    {% else %}
+                    <div class="empty-v2">
+                        <div class="empty-v2__title">No active job posts</div>
+                        {% if session.get('user') == profile.username %}
+                        <a href="{{ url_for('hiring.post_job') }}" class="btn-v2 btn-v2--primary btn-v2--sm" style="margin-top:var(--sp-4);">Post Job</a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div id="activity-content" class="tab-pane" style="display:none;">
+                <div class="card-v2">
+                    <div style="display:flex;flex-direction:column;">
+                        {% for activity in activities %}
+                        <div style="display:flex;gap:var(--sp-4);padding:var(--sp-4) 0;border-bottom:1px solid var(--border-subtle);">
+                            <div style="width:32px;height:32px;border-radius:50%;background:var(--surface-3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">*</div>
+                            <div>
+                                <p style="font-size:var(--text-sm);color:var(--text-primary);margin-bottom:var(--sp-1);"><strong>{{ profile.username }}</strong> {{ activity.action }}</p>
+                                <span style="font-size:var(--text-xs);color:var(--text-muted);">{{ activity.time }}</span>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="empty-v2"><div class="empty-v2__title">No recent activity</div></div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.profile-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.profile-tab').forEach(t => {
+            t.classList.remove('active');
+            t.style.fontWeight = '500';
+            t.style.color = 'var(--text-muted)';
+            t.style.borderBottomColor = 'transparent';
+        });
+        tab.classList.add('active');
+        tab.style.fontWeight = '600';
+        tab.style.color = 'var(--text-primary)';
+        tab.style.borderBottomColor = 'var(--primary)';
+
+        document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+        document.getElementById(tab.dataset.target + '-content').style.display = 'block';
+    });
+});
+</script>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/profile.js') }}"></script>{% endblock %}

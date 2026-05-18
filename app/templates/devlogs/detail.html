@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}DevLog by @{{ devlog.author.username }} — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/devlogs.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main devfeed-shell">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">DevLog</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">@{{ devlog.author.username }}</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('devlogs.index') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Back to DevFeed</a>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;">
+            <div class="devlog-detail-layout">
+                <section>
+                    {% set state = viewer_state.get(devlog.id, {}) %}
+                    {% include 'devlogs/_card.html' %}
+                    <section class="card-v2 animate-fade-up" style="margin-top:var(--sp-6);">
+                        <div class="section-header"><h2 class="section-header__title">Discussion</h2></div>
+                        <div id="detailComments" style="display:flex;flex-direction:column;gap:var(--sp-4);">
+                            {% for comment in comments %}
+                                {% include 'devlogs/_comment.html' %}
+                            {% else %}
+                            <p style="color:var(--text-muted);font-size:var(--text-sm);text-align:center;padding:var(--sp-4);">No comments yet.</p>
+                            {% endfor %}
+                        </div>
+                    </section>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/devlogs.js') }}"></script>
+{% endblock %}

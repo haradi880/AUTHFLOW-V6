@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Hiring Hub — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Ecosystem</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Hiring Hub</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('hiring.talent_search') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">🔍 Talent Search</a>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <!-- Hero -->
+            <section class="hero-v2 animate-fade-up" style="background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(168,85,247,.08),rgba(236,72,153,.06));">
+                <div class="hero-v2__eyebrow">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                    Hiring Ecosystem
+                </div>
+                <h1 class="hero-v2__title">Find your next opportunity or hire top talent.</h1>
+                <p class="hero-v2__desc">Browse jobs in robotics, AI/ML, web dev, and startups. Connect with developers who match your needs.</p>
+            </section>
+
+            <!-- Filters -->
+            <div class="card-v2" style="margin-bottom:var(--sp-6);padding:var(--sp-4);">
+                <form method="get" style="display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center;">
+                    <input type="text" name="q" class="input-v2" placeholder="Search jobs..." value="{{ query }}" style="flex:1;min-width:200px;">
+                    <select name="category" class="input-v2" style="width:auto;min-width:140px;">
+                        <option value="">All Categories</option>
+                        {% for c in categories %}
+                        <option value="{{ c }}" {{ 'selected' if current_category == c }}>{{ c|replace('-',' ')|title }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="type" class="input-v2" style="width:auto;min-width:130px;">
+                        <option value="">All Types</option>
+                        {% for t in job_types %}
+                        <option value="{{ t }}" {{ 'selected' if current_type == t }}>{{ t|replace('-',' ')|title }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="mode" class="input-v2" style="width:auto;min-width:120px;">
+                        <option value="">All Modes</option>
+                        {% for m in work_modes %}
+                        <option value="{{ m }}" {{ 'selected' if current_mode == m }}>{{ m|title }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-v2 btn-v2--primary btn-v2--sm">Filter</button>
+                </form>
+            </div>
+
+            <!-- Job Listings -->
+            <div class="stagger" style="display:flex;flex-direction:column;gap:var(--sp-4);">
+                {% for job in jobs.items %}
+                <a href="{{ url_for('hiring.job_detail', slug=job.slug) }}" class="card-v2 hover-lift" style="display:flex;align-items:flex-start;gap:var(--sp-5);padding:var(--sp-5);text-decoration:none;">
+                    <!-- Company Logo -->
+                    <div class="avatar-v2 avatar-v2--lg" style="background:var(--surface-4);color:var(--text-muted);font-size:var(--text-xl);border-radius:var(--r-xl);">
+                        {% if job.company and job.company.logo %}
+                        <img src="{{ job.company.logo }}" alt="{{ job.company.name }}">
+                        {% else %}
+                        {{ job.company.name[0] if job.company else '?' }}
+                        {% endif %}
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-2);">
+                            <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);">{{ job.title }}</h3>
+                            {% if job.company and job.company.is_verified %}
+                            <span class="badge-v2 badge-v2--success badge-v2--dot">Verified</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--sp-3);">
+                            {{ job.company.name if job.company else 'Unknown' }} · {{ job.location or 'Remote' }}
+                        </div>
+                        <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
+                            <span class="badge-v2 badge-v2--primary">{{ job.job_type|replace('-',' ')|title }}</span>
+                            <span class="badge-v2 badge-v2--info">{{ job.work_mode|title }}</span>
+                            <span class="badge-v2 badge-v2--accent">{{ job.category|replace('-',' ')|title }}</span>
+                            {% if job.experience_level %}
+                            <span class="badge-v2 badge-v2--warning">{{ job.experience_level|title }}</span>
+                            {% endif %}
+                        </div>
+                        {% if job.get_skills_list() %}
+                        <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:var(--sp-3);">
+                            {% for s in job.get_skills_list()[:5] %}
+                            <span class="tag-v2">{{ s }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="hide-mobile" style="text-align:right;flex-shrink:0;">
+                        {% if job.salary_min and job.salary_max %}
+                        <div style="font-family:var(--font-display);font-size:var(--text-md);font-weight:600;color:var(--text-primary);">${{ job.salary_min//1000 }}k–${{ job.salary_max//1000 }}k</div>
+                        <div style="font-size:var(--text-xs);color:var(--text-muted);">{{ job.salary_currency }}/yr</div>
+                        {% endif %}
+                        <div style="font-size:var(--text-xs);color:var(--text-faint);margin-top:var(--sp-2);">{{ job.applications_count }} applicants</div>
+                    </div>
+                </a>
+                {% else %}
+                <div class="empty-v2">
+                    <div class="empty-v2__icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
+                    <div class="empty-v2__title">No jobs found</div>
+                    <div class="empty-v2__desc">Try adjusting your filters or check back later.</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if jobs.pages > 1 %}
+            <div style="display:flex;justify-content:center;gap:var(--sp-2);margin-top:var(--sp-8);">
+                {% if jobs.has_prev %}
+                <a href="?page={{ jobs.prev_num }}&q={{ query }}&category={{ current_category }}&type={{ current_type }}&mode={{ current_mode }}" class="btn-v2 btn-v2--secondary btn-v2--sm">← Prev</a>
+                {% endif %}
+                <span style="padding:var(--sp-2) var(--sp-4);font-size:var(--text-sm);color:var(--text-muted);">Page {{ jobs.page }} of {{ jobs.pages }}</span>
+                {% if jobs.has_next %}
+                <a href="?page={{ jobs.next_num }}&q={{ query }}&category={{ current_category }}&type={{ current_type }}&mode={{ current_mode }}" class="btn-v2 btn-v2--primary btn-v2--sm">Next →</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

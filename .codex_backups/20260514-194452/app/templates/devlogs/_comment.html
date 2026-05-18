@@ -1,0 +1,12 @@
+<div class="devlog-comment">
+    <a class="devlog-comment-avatar" href="{{ url_for('main.public_profile', username=comment.author.username) }}">
+        {{ comment.author.username[0] | upper }}
+    </a>
+    <div>
+        <div class="devlog-comment-meta">
+            <a href="{{ url_for('main.public_profile', username=comment.author.username) }}">@{{ comment.author.username }}</a>
+            <time class="js-local-time" datetime="{{ comment.created_at.isoformat() }}Z" data-format="short-date">{{ comment.created_at.strftime('%b %d') }}</time>
+        </div>
+        <p>{{ comment.content }}</p>
+    </div>
+</div>

@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}DevFeed — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/devlogs.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main devfeed-shell">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Live Network</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">DevFeed</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('blog.create_blog') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Write Blog</a>
+                <a href="{{ url_for('project.create_project') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Ship Project</a>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <section class="devfeed-hero">
+                <div>
+                    <span class="hero-eyebrow" style="color:var(--primary);font-size:var(--text-xs);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Build in public</span>
+                    <h2 style="font-size:clamp(1.5rem,3vw,2.5rem);font-weight:700;margin-bottom:var(--sp-2);">Daily progress, shipped ideas, maker signals.</h2>
+                    <p style="font-size:var(--text-lg);color:var(--text-secondary);max-width:600px;">Share the small wins that compound: what changed, what shipped, what is blocked, and what the community can help with.</p>
+                </div>
+                <div class="devfeed-hero-stats">
+                    <div><strong style="color:var(--text-primary);">{{ devlogs|length }}</strong><span>fresh logs</span></div>
+                    <div><strong style="color:var(--text-primary);">{{ top_creators|length }}</strong><span>active creators</span></div>
+                </div>
+            </section>
+
+            <div class="devfeed-layout">
+                <section class="devfeed-main">
+                    {% if current_user.is_authenticated %}
+                    <form class="devlog-composer" id="devlogComposer" enctype="multipart/form-data" style="background:var(--surface-2);border-color:var(--border-subtle);">
+                        <div class="composer-author">
+                            <div class="avatar-v2 avatar-v2--md">{{ current_user.username[0]|upper }}</div>
+                            <div>
+                                <strong style="color:var(--text-primary);">Post a DevLog</strong>
+                                <p style="margin:0;">Keep it concrete: progress, blockers, proof, next step.</p>
+                            </div>
+                        </div>
+                        <textarea name="content" maxlength="1200" required placeholder="Day 14: finished the auth backend, cleaned up OTP verification, now wiring realtime messaging. #flask #buildinpublic" style="background:var(--surface-1);border-color:var(--border-subtle);"></textarea>
+                        <div class="composer-grid">
+                            <label>
+                                <span>Progress</span>
+                                <div style="display:flex;align-items:center;gap:var(--sp-3);">
+                                    <input type="range" name="progress" min="0" max="100" value="25" data-progress-input style="flex:1;accent-color:var(--primary);">
+                                    <strong data-progress-value style="color:var(--text-primary);font-variant-numeric:tabular-nums;width:40px;text-align:right;">25%</strong>
+                                </div>
+                            </label>
+                            <label>
+                                <span>Milestone</span>
+                                <input class="input-v2" name="milestone" maxlength="160" placeholder="Reached private beta">
+                            </label>
+                        </div>
+                        <div class="composer-grid">
+                            <label>
+                                <span>Hashtags</span>
+                                <input class="input-v2" name="hashtags" placeholder="flask, ai, robotics">
+                            </label>
+                            <label>
+                                <span>Media</span>
+                                <input class="input-v2" type="file" name="media" accept="image/*,video/mp4,video/webm,video/quicktime" multiple style="padding:var(--sp-2);">
+                            </label>
+                        </div>
+                        <div class="composer-footer">
+                            <span id="devlogComposerStatus">Daily DevLog can earn XP once per day.</span>
+                            <button type="submit" class="btn-v2 btn-v2--primary">Post DevLog</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="devlog-composer signed-out-composer" style="text-align:center;padding:var(--sp-8);background:var(--surface-2);">
+                        <h2 style="font-size:var(--text-xl);margin-bottom:var(--sp-2);">Join the build feed</h2>
+                        <p style="margin-bottom:var(--sp-4);">Create an account to post DevLogs, like, repost, comment, bookmark, and grow your developer streak.</p>
+                        <a href="{{ url_for('auth.register') }}" class="btn-v2 btn-v2--primary">Create Account</a>
+                    </div>
+                    {% endif %}
+
+                    <div class="devfeed-tabs" style="background:transparent;border:none;border-bottom:1px solid var(--border-subtle);border-radius:0;padding:0;gap:var(--sp-6);">
+                        <a class="{{ 'active' if sort == 'latest' }}" href="{{ url_for('devlogs.index', sort='latest') }}" style="background:transparent;border-radius:0;padding:var(--sp-3) 0;border-bottom:2px solid {{ 'var(--primary)' if sort == 'latest' else 'transparent' }};color:{{ 'var(--text-primary)' if sort == 'latest' else 'var(--text-secondary)' }};">Latest</a>
+                        <a class="{{ 'active' if sort == 'trending' }}" href="{{ url_for('devlogs.index', sort='trending') }}" style="background:transparent;border-radius:0;padding:var(--sp-3) 0;border-bottom:2px solid {{ 'var(--primary)' if sort == 'trending' else 'transparent' }};color:{{ 'var(--text-primary)' if sort == 'trending' else 'var(--text-secondary)' }};">Trending</a>
+                        <a class="{{ 'active' if sort == 'following' }}" href="{{ url_for('devlogs.index', sort='following') }}" style="background:transparent;border-radius:0;padding:var(--sp-3) 0;border-bottom:2px solid {{ 'var(--primary)' if sort == 'following' else 'transparent' }};color:{{ 'var(--text-primary)' if sort == 'following' else 'var(--text-secondary)' }};">Following</a>
+                        <a class="{{ 'active' if sort == 'milestones' }}" href="{{ url_for('devlogs.index', sort='milestones') }}" style="background:transparent;border-radius:0;padding:var(--sp-3) 0;border-bottom:2px solid {{ 'var(--primary)' if sort == 'milestones' else 'transparent' }};color:{{ 'var(--text-primary)' if sort == 'milestones' else 'var(--text-secondary)' }};">Milestones</a>
+                    </div>
+
+                    <div id="devlogFeed" class="devlog-feed">
+                        {% for devlog in devlogs %}
+                            {% set state = viewer_state.get(devlog.id, {}) %}
+                            {% include 'devlogs/_card.html' %}
+                        {% else %}
+                        <div class="empty-v2" style="border-style:dashed;">
+                            <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+                            <div class="empty-v2__title">No DevLogs yet</div>
+                            <div class="empty-v2__desc">Post the first build update and set the pace for the community.</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {% if pagination.has_next %}
+                    <button type="button" class="btn-v2 btn-v2--secondary" style="width:100%;margin-top:var(--sp-4);" id="loadMoreDevlogs" data-next-page="{{ pagination.next_num }}" data-sort="{{ sort }}">Load more</button>
+                    {% endif %}
+                </section>
+
+                <aside class="devfeed-rail">
+                    <section class="card-v2" style="padding:var(--sp-4);">
+                        <h3 style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-3);">Trending Tags</h3>
+                        <div class="rail-tags">
+                            {% for tag in trending_tags %}
+                            <a href="{{ url_for('devlogs.index') }}?tag={{ tag.slug }}" class="badge-v2" style="background:var(--surface-3);color:var(--text-secondary);">#{{ tag.name }}</a>
+                            {% else %}
+                            <span style="font-size:var(--text-sm);color:var(--text-muted);">No tags yet</span>
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                    <section class="card-v2" style="padding:var(--sp-4);">
+                        <h3 style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-3);">Top Creators</h3>
+                        <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
+                            {% for user in top_creators %}
+                            <a href="{{ url_for('main.public_profile', username=user.username) }}" style="display:flex;align-items:center;gap:var(--sp-3);text-decoration:none;">
+                                <div class="avatar-v2 avatar-v2--sm">{{ user.username[0]|upper }}</div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ user.full_name or user.username }}</div>
+                                    <div style="font-size:var(--text-xs);color:var(--text-muted);">{{ user.xp_total or 0 }} XP</div>
+                                </div>
+                            </a>
+                            {% else %}
+                            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0;">No creators yet.</p>
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                    <section class="card-v2" style="padding:var(--sp-4);">
+                        <h3 style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-3);">Hot Projects</h3>
+                        <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
+                            {% for project in top_projects %}
+                            <a href="{{ url_for('project.project_detail', slug=project.slug) }}" style="text-decoration:none;display:flex;flex-direction:column;gap:2px;">
+                                <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ project.title }}</div>
+                                <div style="font-size:var(--text-xs);color:var(--text-muted);">{{ project.stars_count }} stars</div>
+                            </a>
+                            {% else %}
+                            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0;">No projects yet.</p>
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                    <section class="card-v2" style="padding:var(--sp-4);">
+                        <h3 style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-3);">Sharp Reads</h3>
+                        <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
+                            {% for blog in top_blogs %}
+                            <a href="{{ url_for('blog.blog_detail', slug=blog.slug) }}" style="text-decoration:none;display:flex;flex-direction:column;gap:2px;">
+                                <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ blog.title }}</div>
+                                <div style="font-size:var(--text-xs);color:var(--text-muted);">{{ blog.likes_count }} likes</div>
+                            </a>
+                            {% else %}
+                            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:0;">No blogs yet.</p>
+                            {% endfor %}
+                        </div>
+                    </section>
+                </aside>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/devlogs.js') }}"></script>
+{% endblock %}

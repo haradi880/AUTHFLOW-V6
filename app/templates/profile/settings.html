@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Settings — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Account Control</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Settings</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('main.edit_profile') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Edit Profile</a>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:800px;">
+            <section class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Privacy & Notifications</h2></div>
+                <form method="POST" action="{{ url_for('main.update_preferences') }}" style="display:flex;flex-direction:column;gap:var(--sp-5);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <div class="grid-2" style="gap:var(--sp-4);">
+                        <label style="display:flex;align-items:center;gap:var(--sp-2);cursor:pointer;padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);border:1px solid var(--border-subtle);">
+                            <input type="checkbox" name="email_on_messages" {{ 'checked' if user.email_on_messages else '' }} style="width:16px;height:16px;accent-color:var(--primary);">
+                            <span style="font-size:var(--text-sm);color:var(--text-primary);">Email on messages</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:var(--sp-2);cursor:pointer;padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);border:1px solid var(--border-subtle);">
+                            <input type="checkbox" name="email_on_comments" {{ 'checked' if user.email_on_comments else '' }} style="width:16px;height:16px;accent-color:var(--primary);">
+                            <span style="font-size:var(--text-sm);color:var(--text-primary);">Email on comments</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:var(--sp-2);cursor:pointer;padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);border:1px solid var(--border-subtle);">
+                            <input type="checkbox" name="email_on_follows" {{ 'checked' if user.email_on_follows else '' }} style="width:16px;height:16px;accent-color:var(--primary);">
+                            <span style="font-size:var(--text-sm);color:var(--text-primary);">Email on follows</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:var(--sp-2);cursor:pointer;padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);border:1px solid var(--border-subtle);">
+                            <input type="checkbox" name="email_on_likes" {{ 'checked' if user.email_on_likes else '' }} style="width:16px;height:16px;accent-color:var(--primary);">
+                            <span style="font-size:var(--text-sm);color:var(--text-primary);">Email on likes</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:var(--sp-2);cursor:pointer;padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);border:1px solid var(--border-subtle);">
+                            <input type="checkbox" name="weekly_digest" {{ 'checked' if user.weekly_digest else '' }} style="width:16px;height:16px;accent-color:var(--primary);">
+                            <span style="font-size:var(--text-sm);color:var(--text-primary);">Weekly digest</span>
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Who can message me?</label>
+                        <select class="input-v2" name="message_permission" style="max-width:300px;">
+                            <option value="everyone" {{ 'selected' if user.message_permission == 'everyone' else '' }}>Everyone</option>
+                            <option value="followers" {{ 'selected' if user.message_permission == 'followers' else '' }}>Followers only</option>
+                            <option value="none" {{ 'selected' if user.message_permission == 'none' else '' }}>No one</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;">
+                        <button class="btn-v2 btn-v2--primary" type="submit">Save Preferences</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Security</h2></div>
+                <form method="POST" action="{{ url_for('main.change_password') }}" style="display:flex;flex-direction:column;gap:var(--sp-4);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input class="input-v2" type="password" name="current_password" placeholder="Current password" required>
+                    <input class="input-v2" type="password" name="new_password" placeholder="New strong password" required>
+                    <div style="display:flex;justify-content:flex-end;">
+                        <button class="btn-v2 btn-v2--primary" type="submit">Change Password</button>
+                    </div>
+                </form>
+                
+                <hr class="divider-v2">
+                
+                <form method="POST" action="{{ url_for('main.logout_all_devices') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn-v2 btn-v2--secondary" type="submit" style="color:var(--error);">Log Out All Other Devices</button>
+                </form>
+            </section>
+
+            <section class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Email</h2></div>
+                <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-5);">
+                    <span style="font-size:var(--text-md);color:var(--text-secondary);">{{ user.email }}</span>
+                    {% if user.is_verified %}
+                    <span class="badge-v2 badge-v2--success">Verified</span>
+                    {% else %}
+                    <span class="badge-v2 badge-v2--warning">Not Verified</span>
+                    {% endif %}
+                </div>
+                
+                <form method="POST" action="{{ url_for('main.start_email_change') }}" style="display:flex;gap:var(--sp-3);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input class="input-v2" type="email" name="new_email" placeholder="New email address" required style="flex:1;">
+                    <button class="btn-v2 btn-v2--secondary" type="submit">Send Verification</button>
+                </form>
+                
+                {% if user.pending_email %}
+                <form method="POST" action="{{ url_for('main.verify_email_change') }}" style="display:flex;gap:var(--sp-3);margin-top:var(--sp-4);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <input class="input-v2" name="otp" placeholder="Code sent to {{ user.pending_email }}" required style="flex:1;">
+                    <button class="btn-v2 btn-v2--primary" type="submit">Verify Email Change</button>
+                </form>
+                {% endif %}
+            </section>
+
+            <section class="card-v2 animate-fade-up">
+                <div class="section-header"><h2 class="section-header__title">Data & Account</h2></div>
+                <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
+                    <a href="{{ url_for('main.privacy') }}" style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='var(--surface-4)'" onmouseout="this.style.background='var(--surface-3)'">
+                        <div class="avatar-v2 avatar-v2--sm">P</div>
+                        <div style="flex:1;">
+                            <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">Privacy Policy</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-muted);">How your data is handled.</div>
+                        </div>
+                    </a>
+                    <a href="{{ url_for('main.terms') }}" style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='var(--surface-4)'" onmouseout="this.style.background='var(--surface-3)'">
+                        <div class="avatar-v2 avatar-v2--sm">T</div>
+                        <div style="flex:1;">
+                            <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">Terms of Service</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-muted);">Community expectations.</div>
+                        </div>
+                    </a>
+                    <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);">
+                        <div class="avatar-v2 avatar-v2--sm">D</div>
+                        <div style="flex:1;">
+                            <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">Export Data</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-muted);">Download a JSON copy of your account data.</div>
+                        </div>
+                        <a href="{{ url_for('main.export_account_data') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Export JSON</a>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }} Following - AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+{% block content %}
+<main class="main-content" style="margin-left: 0;">
+    {% set items = [(user.username, url_for('main.public_profile', username=user.username)), ('Following', None)] %}
+    {% include 'components/breadcrumb.html' %}
+    <section class="content-card">
+        <div class="card-header"><h1 class="card-title">@{{ user.username }} follows</h1></div>
+        {% for followed in following %}
+        <a href="{{ url_for('main.public_profile', username=followed.username) }}" class="settings-nav-item" style="text-decoration: none; color: inherit;">
+            <div class="settings-nav-left"><div class="user-avatar">{{ followed.username[0]|upper }}</div><div class="settings-nav-text"><h4>{{ followed.full_name or followed.username }}</h4><p>@{{ followed.username }}</p></div></div>
+        </a>
+        {% else %}<p style="color: var(--text-muted);">Not following anyone yet.</p>{% endfor %}
+    </section>
+</main>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Bookmarks — AuthFlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Reading List</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Bookmarks</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('blog.blogs_feed') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Explore Blogs</a>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <section class="hero-v2 animate-fade-up" style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(59,130,246,.08),rgba(236,72,153,.06));">
+                <div class="hero-v2__eyebrow">📚 Saved for later</div>
+                <h2 class="hero-v2__title">Your personal library of posts worth returning to.</h2>
+            </section>
+
+            <div class="grid-auto stagger">
+                {% for blog in blogs %}
+                    {% include 'components/blog_card.html' %}
+                {% else %}
+                    <div class="empty-v2" style="grid-column:1/-1;">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div>
+                        <div class="empty-v2__title">No bookmarks yet</div>
+                        <div class="empty-v2__desc">Save posts from blog detail pages and they will appear here.</div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% if pagination and pagination.has_next %}
+            <div style="display:flex;justify-content:center;margin-top:var(--sp-8);">
+                <a class="btn-v2 btn-v2--secondary" href="{{ url_for('main.bookmarks', page=pagination.next_num) }}">Load More</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

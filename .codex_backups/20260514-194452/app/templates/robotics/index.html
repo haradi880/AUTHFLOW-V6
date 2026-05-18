@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Robotics Hub — AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Ecosystem</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Robotics Hub</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="/search" class="topnav-v2__search hide-mobile"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Search robotics...<span class="topnav-v2__search-key">⌘K</span></a>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <!-- Hero -->
+            <section class="hero-v2 animate-fade-up" style="background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(16,185,129,.08),rgba(245,158,11,.06));">
+                <div class="hero-v2__eyebrow">🤖 Robotics Ecosystem</div>
+                <h1 class="hero-v2__title">Build, share, and discover robotics projects.</h1>
+                <p class="hero-v2__desc">Upload Arduino, ESP32, ROS, Raspberry Pi projects with schematics, BOMs, firmware, and CAD files.</p>
+                <div class="hero-v2__actions">
+                    <a href="#projects" class="btn-v2 btn-v2--primary">Explore Projects</a>
+                    <a href="/hiring?category=robotics" class="btn-v2 btn-v2--secondary">🔧 Robotics Jobs</a>
+                </div>
+            </section>
+
+            <!-- Category Pills -->
+            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-6);overflow-x:auto;padding-bottom:var(--sp-2);">
+                <a href="{{ url_for('robotics.index') }}" class="tag-v2 {{ 'badge-v2 badge-v2--primary' if not current_type }}" style="padding:var(--sp-2) var(--sp-4);font-size:var(--text-sm);{% if not current_type %}background:var(--primary-muted);border-color:var(--primary);color:var(--primary-hover);{% endif %}">All</a>
+                {% for slug, label in project_types %}
+                <a href="{{ url_for('robotics.index', type=slug) }}" class="tag-v2" style="padding:var(--sp-2) var(--sp-4);font-size:var(--text-sm);{% if current_type == slug %}background:var(--primary-muted);border-color:var(--primary);color:var(--primary-hover);{% endif %}">{{ label }}</a>
+                {% endfor %}
+            </div>
+
+            <!-- Filters -->
+            <div style="display:flex;gap:var(--sp-3);margin-bottom:var(--sp-5);flex-wrap:wrap;align-items:center;">
+                <form method="get" style="display:flex;gap:var(--sp-3);flex:1;min-width:250px;">
+                    {% if current_type %}<input type="hidden" name="type" value="{{ current_type }}">{% endif %}
+                    <input type="text" name="q" class="input-v2" placeholder="Search robotics projects..." value="{{ query }}" style="flex:1;">
+                    <select name="difficulty" class="input-v2" style="width:auto;">
+                        <option value="">All Levels</option>
+                        {% for d in difficulty_levels %}
+                        <option value="{{ d }}" {{ 'selected' if current_difficulty == d }}>{{ d|title }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="sort" class="input-v2" style="width:auto;">
+                        <option value="latest" {{ 'selected' if current_sort == 'latest' }}>Latest</option>
+                        <option value="popular" {{ 'selected' if current_sort == 'popular' }}>Most Stars</option>
+                        <option value="views" {{ 'selected' if current_sort == 'views' }}>Most Viewed</option>
+                    </select>
+                    <button type="submit" class="btn-v2 btn-v2--primary btn-v2--sm">Go</button>
+                </form>
+            </div>
+
+            <!-- Projects Grid -->
+            <div id="projects" class="grid-auto stagger">
+                {% for project in projects.items %}
+                <a href="{{ url_for('robotics.project_detail', slug=project.slug) }}" class="card-v2 hover-lift" style="padding:0;text-decoration:none;display:flex;flex-direction:column;">
+                    {% if project.thumbnail %}
+                    <div style="aspect-ratio:16/9;overflow:hidden;border-radius:var(--r-xl) var(--r-xl) 0 0;position:relative;">
+                        <img src="{{ project.thumbnail_url }}" alt="{{ project.title }}" loading="lazy" style="width:100%;height:100%;object-fit:cover;transition:transform var(--dur-slow) var(--ease-out);">
+                        <span class="badge-v2 badge-v2--info" style="position:absolute;top:var(--sp-3);left:var(--sp-3);">{{ project.project_type|upper }}</span>
+                        {% if project.difficulty %}<span class="badge-v2 badge-v2--warning" style="position:absolute;top:var(--sp-3);right:var(--sp-3);">{{ project.difficulty|title }}</span>{% endif %}
+                    </div>
+                    {% else %}
+                    <div style="aspect-ratio:16/9;background:var(--surface-3);border-radius:var(--r-xl) var(--r-xl) 0 0;display:flex;align-items:center;justify-content:center;font-size:3rem;">🤖</div>
+                    {% endif %}
+                    <div style="padding:var(--sp-5);flex:1;display:flex;flex-direction:column;gap:var(--sp-2);">
+                        <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);line-height:1.3;">{{ project.title }}</h3>
+                        <p style="font-size:var(--text-sm);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ project.description[:150] }}</p>
+                        {% if project.tags %}
+                        <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:auto;padding-top:var(--sp-3);">
+                            {% for tag in project.tags[:3] %}<span class="tag-v2">{{ tag.name }}</span>{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div style="display:flex;align-items:center;gap:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--border-subtle);font-size:var(--text-xs);color:var(--text-faint);margin-top:var(--sp-2);">
+                            <span>⭐ {{ project.stars_count }}</span>
+                            <span>👁 {{ project.views_count }}</span>
+                            <span style="margin-left:auto;">by @{{ project.author.username }}</span>
+                        </div>
+                    </div>
+                </a>
+                {% else %}
+                <div class="empty-v2" style="grid-column:1/-1;">
+                    <div class="empty-v2__icon" style="font-size:2rem;">🤖</div>
+                    <div class="empty-v2__title">No robotics projects yet</div>
+                    <div class="empty-v2__desc">Be the first to showcase a robotics build!</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if projects.pages > 1 %}
+            <div style="display:flex;justify-content:center;gap:var(--sp-2);margin-top:var(--sp-8);">
+                {% if projects.has_prev %}<a href="?page={{ projects.prev_num }}&type={{ current_type }}&difficulty={{ current_difficulty }}&sort={{ current_sort }}&q={{ query }}" class="btn-v2 btn-v2--secondary btn-v2--sm">← Prev</a>{% endif %}
+                <span style="padding:var(--sp-2) var(--sp-4);font-size:var(--text-sm);color:var(--text-muted);">{{ projects.page }}/{{ projects.pages }}</span>
+                {% if projects.has_next %}<a href="?page={{ projects.next_num }}&type={{ current_type }}&difficulty={{ current_difficulty }}&sort={{ current_sort }}&q={{ query }}" class="btn-v2 btn-v2--primary btn-v2--sm">Next →</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

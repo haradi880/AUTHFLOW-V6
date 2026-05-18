@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Upload Robotics Project - AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Robotics</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Upload Project</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('robotics.index') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Cancel</a>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:900px;">
+            <div class="card-v2 animate-fade-up">
+                <form method="POST" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--sp-6);">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                    <div class="section-header"><h2 class="section-header__title">Project Details</h2></div>
+                    <div class="grid-2" style="gap:var(--sp-4);">
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Title</label>
+                            <input class="input-v2" name="title" required maxlength="200" placeholder="Autonomous line follower with ESP32">
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Description</label>
+                            <textarea class="input-v2" name="description" rows="6" required placeholder="Explain what it does, parts used, build notes, and what someone can learn from it."></textarea>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Project Type</label>
+                            <select class="input-v2" name="project_type">
+                                {% for slug, label in project_types %}
+                                <option value="{{ slug }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Difficulty</label>
+                            <select class="input-v2" name="difficulty">
+                                {% for level in difficulty_levels %}
+                                <option value="{{ level }}">{{ level|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Status</label>
+                            <select class="input-v2" name="status">
+                                <option value="published">Published</option>
+                                <option value="draft">Draft</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Thumbnail</label>
+                            <input class="input-v2" name="thumbnail" type="file" accept="image/*">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">GitHub URL</label>
+                            <input class="input-v2" name="github_url" type="url" placeholder="https://github.com/...">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Demo URL</label>
+                            <input class="input-v2" name="demo_url" type="url" placeholder="https://...">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Video URL</label>
+                            <input class="input-v2" name="video_url" type="url" placeholder="https://youtube.com/...">
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Tags</label>
+                            <input class="input-v2" name="tags" id="tags" list="tagSuggestions" placeholder="ros, arduino, sensors">
+                            <datalist id="tagSuggestions"></datalist>
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Hardware Specs</label>
+                            <textarea class="input-v2" name="hardware_specs" rows="3" placeholder="Controller, sensors, motors, battery, voltage, communication, chassis..."></textarea>
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Bill of Materials</label>
+                            <textarea class="input-v2" name="bom_data" rows="3" placeholder="Parts, quantities, links, approximate cost..."></textarea>
+                        </div>
+                    </div>
+
+                    <hr class="divider-v2">
+                    <div class="section-header"><h2 class="section-header__title">Files</h2></div>
+                    <div class="grid-2" style="gap:var(--sp-4);">
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">File Type</label>
+                            <select class="input-v2" name="file_type">
+                                {% for file_type in file_types %}
+                                <option value="{{ file_type }}">{{ file_type|upper }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">File Description</label>
+                            <input class="input-v2" name="file_description" maxlength="300" placeholder="Firmware, wiring diagram, CAD files...">
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <label class="form-label" style="display:block;margin-bottom:var(--sp-2);">Upload Files</label>
+                            <input class="input-v2" name="files" type="file" multiple>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:var(--sp-3);padding-top:var(--sp-4);border-top:1px solid var(--border-subtle);">
+                        <a href="{{ url_for('robotics.index') }}" class="btn-v2 btn-v2--secondary">Cancel</a>
+                        <button type="submit" class="btn-v2 btn-v2--primary">Save Robotics Project</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const tagInput = document.getElementById('tags');
+    const datalist = document.getElementById('tagSuggestions');
+    if (!tagInput || !datalist) return;
+    tagInput.addEventListener('input', async () => {
+        const current = tagInput.value.split(',').pop().trim();
+        if (!current) return;
+        const response = await fetch(`/tags/suggest?q=${encodeURIComponent(current)}`);
+        const tags = await response.json();
+        datalist.innerHTML = tags.map(tag => `<option value="${tag.name}"></option>`).join('');
+    });
+});
+</script>
+{% endblock %}

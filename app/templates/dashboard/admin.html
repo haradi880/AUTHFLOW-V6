@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Dashboard</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Admin</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('main.home') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Back to App</a>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:1200px;">
+            <div class="grid-4" style="margin-bottom:var(--sp-6);">
+                <div class="card-v2 animate-fade-up" style="padding:var(--sp-4);">
+                    <div style="color:var(--text-muted);font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:var(--sp-2);">Total Users</div>
+                    <div style="font-size:var(--text-3xl);font-weight:700;color:var(--text-primary);font-family:var(--font-display);">{{ total_users }}</div>
+                </div>
+                <div class="card-v2 animate-fade-up" style="padding:var(--sp-4);animation-delay:50ms;">
+                    <div style="color:var(--text-muted);font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:var(--sp-2);">Admins</div>
+                    <div style="font-size:var(--text-3xl);font-weight:700;color:var(--text-primary);font-family:var(--font-display);">{{ total_admins }}</div>
+                </div>
+                <div class="card-v2 animate-fade-up" style="padding:var(--sp-4);animation-delay:100ms;">
+                    <div style="color:var(--text-muted);font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:var(--sp-2);">Total Blogs</div>
+                    <div style="font-size:var(--text-3xl);font-weight:700;color:var(--text-primary);font-family:var(--font-display);">{{ total_blogs }}</div>
+                </div>
+                <div class="card-v2 animate-fade-up" style="padding:var(--sp-4);animation-delay:150ms;">
+                    <div style="color:var(--text-muted);font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:var(--sp-2);">Open Reports</div>
+                    <div style="font-size:var(--text-3xl);font-weight:700;color:var(--error);font-family:var(--font-display);">{{ open_reports }}</div>
+                </div>
+            </div>
+
+            <div class="grid-1 gap-6">
+                <!-- Users -->
+                <section class="card-v2 animate-fade-up" style="padding:0;overflow:hidden;">
+                    <div class="section-header" style="padding:var(--sp-5);margin:0;border-bottom:1px solid var(--border-subtle);"><h2 class="section-header__title">User Management</h2></div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;text-align:left;font-size:var(--text-sm);">
+                            <thead style="background:var(--surface-2);border-bottom:1px solid var(--border-subtle);">
+                                <tr>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">User</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Email</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Role</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Status</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Verified</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);text-align:right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr style="border-bottom:1px solid var(--border-subtle);transition:background var(--dur-fast);" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='transparent'">
+                                    <td style="padding:var(--sp-3) var(--sp-4);"><a href="{{ url_for('main.public_profile', username=user.username) }}" style="color:var(--primary);text-decoration:none;font-weight:500;">@{{ user.username }}</a></td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);color:var(--text-secondary);">{{ user.email }}</td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);"><span class="badge-v2 {{ 'badge-v2--primary' if user.is_admin else 'badge-v2--neutral' }}">{{ 'Admin' if user.is_admin else 'User' }}</span></td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);">
+                                        <div style="display:flex;align-items:center;gap:6px;">
+                                            <div style="width:8px;height:8px;border-radius:50%;background:{{ 'var(--success)' if user.active else 'var(--error)' }};"></div>
+                                            <span>{{ 'Active' if user.active else 'Suspended' }}</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);color:var(--text-secondary);">{{ 'Yes' if user.is_verified else 'No' }}</td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);text-align:right;">
+                                        {% if not user.is_admin %}
+                                        <form method="POST" action="{{ url_for('admin.toggle_user_active', user_id=user.id) }}" style="margin:0;">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                            <button class="btn-v2 btn-v2--secondary btn-v2--sm" type="submit" style="color:{{ 'var(--error)' if user.active else 'var(--success)' }};">{{ 'Suspend' if user.active else 'Restore' }}</button>
+                                        </form>
+                                        {% else %}-{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Reports -->
+                <section class="card-v2 animate-fade-up" style="padding:0;overflow:hidden;">
+                    <div class="section-header" style="padding:var(--sp-5);margin:0;border-bottom:1px solid var(--border-subtle);"><h2 class="section-header__title">Moderation Reports</h2></div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;text-align:left;font-size:var(--text-sm);">
+                            <thead style="background:var(--surface-2);border-bottom:1px solid var(--border-subtle);">
+                                <tr>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Reported User</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Reason</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Details</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);">Status</th>
+                                    <th style="padding:var(--sp-3) var(--sp-4);font-weight:600;color:var(--text-secondary);text-align:right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for report in reports %}
+                                <tr style="border-bottom:1px solid var(--border-subtle);transition:background var(--dur-fast);" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background='transparent'">
+                                    <td style="padding:var(--sp-3) var(--sp-4);"><a href="{{ url_for('main.public_profile', username=report.reported_user.username) }}" style="color:var(--text-primary);text-decoration:none;font-weight:500;">@{{ report.reported_user.username }}</a></td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);"><span class="badge-v2 badge-v2--warning">{{ report.reason }}</span></td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);color:var(--text-secondary);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ report.details }}">{{ report.details or '-' }}</td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);">{{ report.status|title }}</td>
+                                    <td style="padding:var(--sp-3) var(--sp-4);text-align:right;">
+                                        <form method="POST" action="{{ url_for('admin.update_report_status', report_id=report.id) }}" style="display:flex;gap:var(--sp-2);justify-content:flex-end;margin:0;">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                            <select class="input-v2" name="status" style="padding:var(--sp-1) var(--sp-2);font-size:var(--text-xs);height:auto;width:100px;">
+                                                {% for status in ['open', 'reviewing', 'resolved', 'dismissed'] %}
+                                                <option value="{{ status }}" {{ 'selected' if report.status == status }}>{{ status|title }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button class="btn-v2 btn-v2--primary btn-v2--sm" type="submit" style="padding:var(--sp-1) var(--sp-2);font-size:var(--text-xs);">Save</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="5" style="padding:var(--sp-6);text-align:center;color:var(--text-muted);">No reports yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Queue -->
+                <section class="card-v2 animate-fade-up" style="padding:0;overflow:hidden;">
+                    <div class="section-header" style="padding:var(--sp-5);margin:0;border-bottom:1px solid var(--border-subtle);"><h2 class="section-header__title">Content Review Queue</h2></div>
+                    <div style="display:flex;flex-direction:column;">
+                        {% for blog in review_blogs %}
+                        <div style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4);border-bottom:1px solid var(--border-subtle);">
+                            <div class="avatar-v2 avatar-v2--md" style="background:var(--info-light);color:var(--info);">B</div>
+                            <div style="flex:1;">
+                                <div style="font-weight:600;font-size:var(--text-sm);color:var(--text-primary);">{{ blog.title }}</div>
+                                <div style="font-size:var(--text-xs);color:var(--text-muted);">Blog draft by @{{ blog.author.username }}</div>
+                            </div>
+                            <form method="POST" action="{{ url_for('admin.update_blog_status', blog_id=blog.id) }}" style="margin:0;">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="published">
+                                <button class="btn-v2 btn-v2--primary btn-v2--sm" type="submit">Publish</button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                        
+                        {% for project in review_projects %}
+                        <div style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4);border-bottom:1px solid var(--border-subtle);">
+                            <div class="avatar-v2 avatar-v2--md" style="background:var(--success-light);color:var(--success);">P</div>
+                            <div style="flex:1;">
+                                <div style="font-weight:600;font-size:var(--text-sm);color:var(--text-primary);">{{ project.title }}</div>
+                                <div style="font-size:var(--text-xs);color:var(--text-muted);">Project draft by @{{ project.author.username }}</div>
+                            </div>
+                            <form method="POST" action="{{ url_for('admin.update_project_status', project_id=project.id) }}" style="margin:0;">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="published">
+                                <button class="btn-v2 btn-v2--primary btn-v2--sm" type="submit">Publish</button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                        
+                        {% if not review_blogs and not review_projects %}
+                        <div class="empty-v2" style="border:none;">
+                            <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+                            <div class="empty-v2__title">Queue Empty</div>
+                            <div class="empty-v2__desc">No draft content in the review queue.</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

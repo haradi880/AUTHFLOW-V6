@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Terms - AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block content %}
+<main class="main-content" style="margin-left: 0; max-width: 900px; margin-inline: auto;">
+    <section class="content-card">
+        <h1 class="page-title">Terms</h1>
+        <p>Use AuthFlow to publish your own work, showcase projects, follow developers, save posts, and communicate respectfully.</p>
+        <p>Do not upload illegal, abusive, spammy, deceptive, or infringing content. Reports and blocks may be reviewed by moderators.</p>
+        <p>The platform may rate limit activity such as login, OTP requests, comments, messages, follows, and reports to protect users and reduce spam.</p>
+        <p>Public profiles, blogs, projects, likes, views, and follows may be visible to other users. Private messages should not be shared without permission.</p>
+        <a href="{{ url_for('main.home') }}" class="btn btn-primary">Back Home</a>
+    </section>
+</main>
+{% endblock %}

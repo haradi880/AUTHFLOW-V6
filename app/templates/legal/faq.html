@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}FAQ — AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/faq.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main faq-shell">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Help Center</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">FAQ</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('devlogs.index') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Open DevFeed</a>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <section class="hero-v2 animate-fade-up" style="background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(99,102,241,.08),rgba(16,185,129,.06));">
+                <div class="hero-v2__eyebrow">📚 Documentation</div>
+                <h2 class="hero-v2__title">Everything builders need to know.</h2>
+            </section>
+
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <input id="faqSearch" type="search" class="input-v2" placeholder="Search devlogs, XP, challenges, teams..." style="font-size:var(--text-lg);padding:var(--sp-4);">
+            </div>
+
+            <div class="faq-filters" id="faqFilters" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-6);">
+                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm active" data-category="all">All</button>
+                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="core">Core</button>
+                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="ecosystem">Ecosystem</button>
+                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="social">Social</button>
+                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="growth">Growth</button>
+                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="security">Security</button>
+            </div>
+
+            <section class="grid-2 stagger" id="faqList" style="align-items:start;">
+                {% set faqs = [
+                    ('core', 'What is AuthFlow?', 'AuthFlow is evolving into a developer ecosystem for publishing, project showcases, daily build logs, collaboration, hiring, AI workflows, launches, challenges, and professional identity.'),
+                    ('core', 'What are DevLogs?', 'DevLogs are short build-in-public updates with progress, milestones, hashtags, media, likes, comments, reposts, bookmarks, and XP. They are designed for daily activity and developer journey timelines.'),
+                    ('core', 'How do blogs and projects fit in?', 'Blogs are long-form knowledge posts. Projects are portfolio-grade shipped work. DevLogs capture the daily story between those bigger artifacts.'),
+                    ('ecosystem', 'What will the AI tools area support?', 'The AI tools area is planned for prompts, workflows, agents, automation templates, datasets, models, ratings, reviews, collections, and AI creator reputation.'),
+                    ('ecosystem', 'How will challenges work?', 'Challenges will have public briefs, countdowns, submissions, voting, leaderboards, winners, XP rewards, trophies, and history pages. Submissions are public by design.'),
+                    ('ecosystem', 'What is the developer marketplace?', 'The marketplace will support hiring, collaboration requests, startup needs, proposals, ratings, skill filters, availability, bookmarks, and messaging.'),
+                    ('ecosystem', 'What are teams?', 'Teams will provide shared profiles, branding, roles, permissions, chat, projects, blogs, files, activity feeds, invites, and analytics for collaborative builders.'),
+                    ('ecosystem', 'What is the open-source hub?', 'The open-source hub is planned for good-first issues, contributor requests, hackathon projects, issue boards, maintainers, labels, discussions, and GitHub-ready integrations.'),
+                    ('ecosystem', 'What are product launches?', 'Launches will let makers publish apps, SaaS products, AI tools, APIs, robotics projects, and open-source tools with upvotes, rankings, comments, maker profiles, media, and analytics.'),
+                    ('ecosystem', 'What are stack pages?', 'Stack pages such as Python, Flask, robotics, and AI will aggregate creators, blogs, projects, tools, discussions, challenge winners, and SEO-focused topic content.'),
+                    ('social', 'How does following work?', 'Following personalizes feeds and creates social graph context for profile discovery, message permissions, notifications, and future recommendations.'),
+                    ('social', 'How do notifications work?', 'Notifications are stored in the database, shown in the notification center, counted in badges, and optionally emailed based on user preferences.'),
+                    ('social', 'How does messaging work?', 'Messages persist in the database, support unread counts, AJAX sending, polling, block checks, and per-user message permissions.'),
+                    ('growth', 'What is XP?', 'XP rewards meaningful activity such as daily login, publishing, receiving likes or stars, comments, follows, profile completion, and daily DevLogs.'),
+                    ('growth', 'What are badges and rankings?', 'Badges, streaks, rankings, trophies, and leaderboards are planned identity layers that will build on XP, challenge wins, AI contributions, and launch performance.'),
+                    ('growth', 'How can I grow my profile?', 'Complete your profile, publish useful blogs, ship projects, post DevLogs consistently, join challenges, help other creators, and keep your work tagged clearly.'),
+                    ('security', 'How is account security handled?', 'The app uses hashed passwords, email OTP verification, password reset OTPs, login lockout, CSRF protection, secure upload validation, and moderation controls.'),
+                    ('security', 'Are uploads safe?', 'Uploads are folder-restricted, extension-checked, randomly named, image-verified where applicable, resized, and served only from allowlisted folders.'),
+                    ('security', 'How is spam reduced?', 'Sensitive actions are rate limited, CSRF-protected where session based, and moderation/reporting workflows are available for admin review.')
+                ] %}
+
+                {% for category, question, answer in faqs %}
+                <article class="card-v2 faq-item hover-lift" data-category="{{ category }}" data-search="{{ (question ~ ' ' ~ answer)|lower }}" style="padding:var(--sp-4);cursor:pointer;" onclick="this.classList.toggle('expanded')">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);margin:0;pointer-events:none;">{{ question }}</h3>
+                        <svg class="faq-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.3s;pointer-events:none;"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                    <div class="faq-answer-content" style="max-height:0;overflow:hidden;transition:max-height 0.3s ease, margin-top 0.3s ease;">
+                        <p style="margin:0;padding-top:var(--sp-3);font-size:var(--text-sm);color:var(--text-secondary);line-height:1.6;">{{ answer }}</p>
+                    </div>
+                </article>
+                {% endfor %}
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const filters = document.querySelectorAll('.faq-filters button');
+        const items = document.querySelectorAll('.faq-item');
+        const search = document.getElementById('faqSearch');
+
+        // Style overrides for active filter
+        const styleTag = document.createElement('style');
+        styleTag.innerHTML = `
+            .faq-filters button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+            .faq-item.expanded .faq-answer-content { max-height: 500px; }
+            .faq-item.expanded .faq-icon { transform: rotate(180deg); }
+        `;
+        document.head.appendChild(styleTag);
+
+        filters.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filters.forEach(f => f.classList.remove('active'));
+                btn.classList.add('active');
+                filterFaqs();
+            });
+        });
+
+        if (search) {
+            search.addEventListener('input', filterFaqs);
+        }
+
+        function filterFaqs() {
+            const activeFilter = document.querySelector('.faq-filters button.active').dataset.category;
+            const query = (search ? search.value.toLowerCase() : '');
+
+            items.forEach(item => {
+                const matchesCat = activeFilter === 'all' || item.dataset.category === activeFilter;
+                const matchesSearch = item.dataset.search.includes(query);
+                if (matchesCat && matchesSearch) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

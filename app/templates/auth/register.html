@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Create Account — AuthFlow{% endblock %}
+
+{% block content %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--sp-6);background:radial-gradient(circle at center, var(--surface-2) 0%, var(--surface-0) 100%);">
+    <div class="card-v2 animate-scale-in" style="width:100%;max-width:400px;padding:var(--sp-8) var(--sp-6);">
+        <div style="text-align:center;margin-bottom:var(--sp-6);">
+            <div class="avatar-v2 avatar-v2--lg" style="margin:0 auto var(--sp-4);">A</div>
+            <h1 style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;color:var(--text-primary);margin-bottom:var(--sp-2);">Create Account</h1>
+            <p style="font-size:var(--text-sm);color:var(--text-muted);">Join the developer and robotics ecosystem.</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div style="padding:var(--sp-3);background:var(--{{ category }}-muted, var(--info-muted));color:var(--{{ category }}, var(--info));border-radius:var(--r-md);font-size:var(--text-sm);margin-bottom:var(--sp-4);text-align:center;">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('auth.register') }}" style="display:flex;flex-direction:column;gap:var(--sp-4);">
+            <div>
+                <label for="username" style="display:block;font-size:var(--text-sm);font-weight:500;color:var(--text-primary);margin-bottom:var(--sp-2);">Username</label>
+                <input type="text" id="username" name="username" class="input-v2" placeholder="johndoe" required autofocus minlength="3" maxlength="30">
+            </div>
+            <div>
+                <label for="email" style="display:block;font-size:var(--text-sm);font-weight:500;color:var(--text-primary);margin-bottom:var(--sp-2);">Email Address</label>
+                <input type="email" id="email" name="email" class="input-v2" placeholder="you@example.com" required>
+            </div>
+            <div>
+                <label for="password" style="display:block;font-size:var(--text-sm);font-weight:500;color:var(--text-primary);margin-bottom:var(--sp-2);">Password</label>
+                <input type="password" id="password" name="password" class="input-v2" placeholder="Min. 8 characters" required minlength="8">
+            </div>
+            <div style="font-size:var(--text-sm);">
+                <label style="display:flex;align-items:flex-start;gap:var(--sp-2);color:var(--text-secondary);cursor:pointer;">
+                    <input type="checkbox" required style="accent-color:var(--primary);margin-top:4px;">
+                    <span style="line-height:1.4;">I agree to the <a href="{{ url_for('main.terms') }}" style="color:var(--primary-hover);text-decoration:none;">Terms</a> and <a href="{{ url_for('main.privacy') }}" style="color:var(--primary-hover);text-decoration:none;">Privacy Policy</a></span>
+                </label>
+            </div>
+            <button type="submit" class="btn-v2 btn-v2--primary btn-v2--lg" style="margin-top:var(--sp-2);">Create Account</button>
+        </form>
+
+        <div style="text-align:center;margin-top:var(--sp-6);font-size:var(--text-sm);color:var(--text-muted);">
+            Already have an account? <a href="{{ url_for('auth.login') }}" style="color:var(--primary-hover);text-decoration:none;font-weight:500;">Sign in</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AuthFlow{% endblock %}
+{% block meta_desc %}Your developer workspace. Track projects, blogs, XP, and community activity.{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/feed.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+
+    <div class="app-main">
+        <!-- Top Nav -->
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Workspace</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Dashboard</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="/search" class="topnav-v2__search hide-mobile">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    Search...
+                    <span class="topnav-v2__search-key">⌘K</span>
+                </a>
+                <a href="{{ url_for('blog.create_blog') }}" class="btn-v2 btn-v2--primary btn-v2--sm">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Write
+                </a>
+                <a href="{{ url_for('project.create_project') }}" class="btn-v2 btn-v2--secondary btn-v2--sm hide-mobile">New Project</a>
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <!-- Hero -->
+            <section class="hero-v2 animate-fade-up">
+                <div class="hero-v2__eyebrow">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    Developer Ecosystem
+                </div>
+                <h2 class="hero-v2__title">Build, ship, and grow your developer presence.</h2>
+                <p class="hero-v2__desc">Publish ideas, showcase projects, earn reputation, and connect with the community.</p>
+                <div class="hero-v2__actions">
+                    <a href="{{ url_for('devlogs.index') }}" class="btn-v2 btn-v2--primary">Open DevFeed</a>
+                    <a href="{{ url_for('blog.blogs_feed') }}" class="btn-v2 btn-v2--secondary">Explore Blogs</a>
+                    <a href="/robotics" class="btn-v2 btn-v2--ghost">🤖 Robotics Hub</a>
+                </div>
+            </section>
+
+            <!-- Stats Grid -->
+            <div class="grid-4 stagger" style="margin-bottom:var(--sp-6);">
+                <div class="stat-v2">
+                    <div class="stat-v2__label">Total Views</div>
+                    <div class="stat-v2__value">{{ dashboard_stats.blog_views }}</div>
+                    <div class="stat-v2__hint">Across all blogs</div>
+                </div>
+                <div class="stat-v2">
+                    <div class="stat-v2__label">Reactions</div>
+                    <div class="stat-v2__value">{{ dashboard_stats.blog_likes }}</div>
+                    <div class="stat-v2__hint">Likes on your content</div>
+                </div>
+                <div class="stat-v2">
+                    <div class="stat-v2__label">Followers</div>
+                    <div class="stat-v2__value">{{ dashboard_stats.followers }}</div>
+                    <div class="stat-v2__hint">Community connections</div>
+                </div>
+                <div class="stat-v2">
+                    <div class="stat-v2__label">Profile</div>
+                    <div class="stat-v2__value">{{ dashboard_stats.profile_completion }}%</div>
+                    <div class="stat-v2__hint">{{ dashboard_stats.profile_views }} profile views</div>
+                </div>
+            </div>
+
+            <!-- XP & Publishing Health -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header">
+                    <h2 class="section-header__title">Publishing Health</h2>
+                    <a href="{{ url_for('main.edit_profile') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Improve Profile</a>
+                </div>
+                <div style="display:flex;align-items:center;gap:var(--sp-6);flex-wrap:wrap;margin-bottom:var(--sp-5);">
+                    <div class="score-circle" style="--size:80px;--pct:{{ dashboard_stats.xp.percent }};">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="score-circle__track" cx="50" cy="50" r="40"/>
+                            <circle class="score-circle__fill" cx="50" cy="50" r="40"/>
+                        </svg>
+                        <span class="score-circle__label" style="font-size:var(--text-md);">{{ dashboard_stats.xp.level }}</span>
+                    </div>
+                    <div>
+                        <div class="badge-v2 badge-v2--primary badge-v2--dot" style="margin-bottom:var(--sp-2);">Level {{ dashboard_stats.xp.level }}</div>
+                        <div style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:700;color:var(--text-primary);">{{ dashboard_stats.xp.total }} XP</div>
+                        <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--sp-1);">{{ dashboard_stats.xp.current }} / {{ dashboard_stats.xp.needed }} XP toward Level {{ dashboard_stats.xp.level + 1 }}</div>
+                    </div>
+                    <div style="flex:1;min-width:200px;">
+                        <div class="progress-v2 progress-v2--lg">
+                            <div class="progress-v2__fill" style="width:{{ dashboard_stats.xp.percent }}%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-4">
+                    <div class="stat-v2"><div class="stat-v2__label">Published Blogs</div><div class="stat-v2__value">{{ dashboard_stats.published_blogs }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Blog Drafts</div><div class="stat-v2__value">{{ dashboard_stats.draft_blogs }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Published Projects</div><div class="stat-v2__value">{{ dashboard_stats.published_projects }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Project Drafts</div><div class="stat-v2__value">{{ dashboard_stats.draft_projects }}</div></div>
+                </div>
+
+                {% if completion_tips %}
+                <hr class="divider-v2">
+                <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
+                    {% for tip in completion_tips %}
+                    <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);background:var(--surface-3);border-radius:var(--r-lg);">
+                        <div class="avatar-v2 avatar-v2--sm" style="background:var(--warning-muted);color:var(--warning);">{{ loop.index }}</div>
+                        <div>
+                            <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ tip }}</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-muted);">Complete to boost your profile score</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Live DevLogs -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header">
+                    <h2 class="section-header__title">Live DevLogs</h2>
+                    <a href="{{ url_for('devlogs.index') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">View Feed</a>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
+                    {% for devlog in recent_devlogs %}
+                    <a href="{{ url_for('devlogs.detail', devlog_id=devlog.id) }}" style="display:flex;align-items:flex-start;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast) var(--ease-out);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
+                        <div class="avatar-v2 avatar-v2--sm">{{ devlog.author.username[0] | upper }}</div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-1);">
+                                <span style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">@{{ devlog.author.username }}</span>
+                                <span class="badge-v2 badge-v2--success badge-v2--dot">{{ devlog.progress }}%</span>
+                            </div>
+                            <p style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ devlog.preview }}</p>
+                        </div>
+                    </a>
+                    {% else %}
+                    <div class="empty-v2" style="padding:var(--sp-8);">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+                        <div class="empty-v2__title">No DevLogs yet</div>
+                        <div class="empty-v2__desc">Start the feed with today's progress.</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Drafts -->
+            {% if user_drafts or project_drafts %}
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Drafts</h2></div>
+                <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
+                    {% for blog in user_drafts %}
+                    <a href="{{ url_for('blog.edit_blog', blog_id=blog.id) }}" style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
+                        <div class="avatar-v2 avatar-v2--sm" style="background:var(--info-muted);color:var(--info);">B</div>
+                        <div style="flex:1;"><div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ blog.title }}</div><div style="font-size:var(--text-xs);color:var(--text-muted);">Blog draft · Updated {{ blog.updated_at.strftime('%b %d') }}</div></div>
+                        <span class="badge-v2 badge-v2--warning">Draft</span>
+                    </a>
+                    {% endfor %}
+                    {% for project in project_drafts %}
+                    <a href="{{ url_for('project.edit_project', project_id=project.id) }}" style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
+                        <div class="avatar-v2 avatar-v2--sm" style="background:var(--accent-muted);color:var(--accent);">P</div>
+                        <div style="flex:1;"><div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ project.title }}</div><div style="font-size:var(--text-xs);color:var(--text-muted);">Project draft · Updated {{ project.updated_at.strftime('%b %d') }}</div></div>
+                        <span class="badge-v2 badge-v2--warning">Draft</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Latest Blogs -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header">
+                    <h2 class="section-header__title">Latest Blogs</h2>
+                    <a href="{{ url_for('blog.blogs_feed') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">View All</a>
+                </div>
+                <div class="grid-auto stagger">
+                    {% for blog in recent_blogs %}
+                        {% include 'components/blog_card.html' %}
+                    {% else %}
+                    <div class="empty-v2" style="grid-column:1/-1;">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                        <div class="empty-v2__title">No published blogs yet</div>
+                        <div class="empty-v2__desc">Write your first blog to get started.</div>
+                        <a href="{{ url_for('blog.create_blog') }}" class="btn-v2 btn-v2--primary">Write Blog</a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Following Feed -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header">
+                    <h2 class="section-header__title">From People You Follow</h2>
+                    <a href="{{ url_for('main.following_feed') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Open Feed</a>
+                </div>
+                <div class="grid-auto stagger">
+                    {% for blog in following_blogs %}
+                        {% include 'components/blog_card.html' %}
+                    {% else %}
+                    <div class="empty-v2" style="grid-column:1/-1;">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                        <div class="empty-v2__title">Follow developers</div>
+                        <div class="empty-v2__desc">Follow creators to personalize this feed.</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Latest Projects -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header">
+                    <h2 class="section-header__title">Latest Projects</h2>
+                    <a href="{{ url_for('project.projects_feed') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">View All</a>
+                </div>
+                <div class="grid-auto stagger">
+                    {% for project in recent_projects %}
+                    <article class="card-v2 hover-lift" style="padding:0;cursor:pointer;" onclick="window.location.href='{{ url_for('project.project_detail', slug=project.slug) }}'">
+                        {% if project.thumbnail %}
+                        <div style="aspect-ratio:16/9;overflow:hidden;border-radius:var(--r-xl) var(--r-xl) 0 0;">
+                            <img src="{{ project.thumbnail|upload_url('projects') }}" alt="{{ project.title }}" loading="lazy" style="width:100%;height:100%;object-fit:cover;transition:transform var(--dur-slow) var(--ease-out);">
+                        </div>
+                        {% endif %}
+                        <div style="padding:var(--sp-5);">
+                            <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);margin-bottom:var(--sp-2);">{{ project.title }}</h3>
+                            <p style="font-size:var(--text-sm);color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ project.description[:150] }}</p>
+                            {% if project.tags %}
+                            <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:var(--sp-3);">
+                                {% for tag in project.tags[:3] %}<span class="tag-v2">{{ tag.name }}</span>{% endfor %}
+                            </div>
+                            {% endif %}
+                            <div style="display:flex;align-items:center;gap:var(--sp-3);margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--border-subtle);font-size:var(--text-xs);color:var(--text-muted);">
+                                <span>⭐ {{ project.stars_count }}</span>
+                                <span>by @{{ project.author.username }}</span>
+                            </div>
+                        </div>
+                    </article>
+                    {% else %}
+                    <div class="empty-v2" style="grid-column:1/-1;">
+                        <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+                        <div class="empty-v2__title">No published projects yet</div>
+                        <div class="empty-v2__desc">Showcase your first project.</div>
+                        <a href="{{ url_for('project.create_project') }}" class="btn-v2 btn-v2--primary">New Project</a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- People to Follow -->
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">People To Follow</h2></div>
+                <div class="grid-auto stagger">
+                    {% for user in suggested_users %}
+                    <a href="{{ url_for('main.public_profile', username=user.username) }}" class="card-v2" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4);text-decoration:none;">
+                        <div class="avatar-v2">{{ user.username[0] | upper }}</div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</div>
+                            <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ user.username }}{% if user.headline %} · {{ user.headline[:40] }}{% endif %}</div>
+                        </div>
+                        <div class="badge-v2 badge-v2--primary">Lv.{{ user.level }}</div>
+                    </a>
+                    {% else %}
+                    <div class="empty-v2" style="grid-column:1/-1;">
+                        <div class="empty-v2__title">No suggestions yet</div>
+                        <div class="empty-v2__desc">Suggestions will appear as the community grows.</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Recently Viewed -->
+            {% if recently_viewed %}
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header"><h2 class="section-header__title">Recently Viewed</h2></div>
+                <div class="grid-auto stagger">
+                    {% for blog in recently_viewed %}
+                        {% include 'components/blog_card.html' %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

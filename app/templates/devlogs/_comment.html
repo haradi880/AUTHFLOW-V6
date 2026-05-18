@@ -1,0 +1,15 @@
+<div class="devlog-comment" data-comment-id="{{ comment.id }}">
+    <a class="devlog-comment-avatar" href="{{ url_for('main.public_profile', username=comment.author.username) }}">
+        {{ comment.author.username[0] | upper }}
+    </a>
+    <div style="flex:1;min-width:0;">
+        <div class="devlog-comment-meta">
+            <a href="{{ url_for('main.public_profile', username=comment.author.username) }}">@{{ comment.author.username }}</a>
+            <time class="js-local-time" datetime="{{ comment.created_at.isoformat() }}Z" data-format="short-date">{{ comment.created_at.strftime('%b %d') }}</time>
+            {% if current_user.is_authenticated and (current_user.id == comment.user_id or current_user.id == comment.devlog.user_id or current_user.is_admin) %}
+            <button type="button" data-comment-delete="{{ comment.id }}" style="background:none;border:0;color:var(--error);font-size:var(--text-xs);cursor:pointer;padding:0;">Delete</button>
+            {% endif %}
+        </div>
+        <p>{{ comment.content }}</p>
+    </div>
+</div>

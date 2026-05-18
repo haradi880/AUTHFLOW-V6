@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Privacy - AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block content %}
+<main class="main-content" style="margin-left: 0; max-width: 900px; margin-inline: auto;">
+    <section class="content-card">
+        <h1 class="page-title">Privacy Policy</h1>
+        <p>AuthFlow uses essential cookies for login sessions, CSRF protection, and remember-me authentication. Optional analytics or marketing cookies should only run after consent.</p>
+        <p>We store profile information, uploads, messages, notifications, follows, likes, bookmarks, and content you publish so the app can provide its social and portfolio features.</p>
+        <p>Email may be used for OTP verification, password reset, message/comment/follow/like notifications, and weekly digest preferences you control in settings.</p>
+        <p>Uploads are served as public assets when attached to public profiles, blogs, or projects. Direct messages are private to the participants and administrators should treat them as sensitive operational data.</p>
+        <p>Account export and deletion are planned self-service controls. Until then, users should contact the site operator for deletion/export requests.</p>
+        <a href="{{ url_for('main.home') }}" class="btn btn-primary">Back Home</a>
+    </section>
+</main>
+{% endblock %}

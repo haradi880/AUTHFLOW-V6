@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard — AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker"><a href="{{ url_for('reputation.index') }}" style="color:inherit;text-decoration:none;">Reputation</a></span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Leaderboard</span>
+                </div>
+            </div>
+        </nav>
+        <div class="app-content" style="max-width:800px;">
+            <!-- Period tabs -->
+            <div style="display:flex;gap:var(--sp-2);margin-bottom:var(--sp-6);">
+                {% for p, label in [('alltime','All Time'),('monthly','Monthly'),('weekly','Weekly')] %}
+                <a href="?period={{ p }}" class="btn-v2 {{ 'btn-v2--primary' if period == p else 'btn-v2--secondary' }} btn-v2--sm">{{ label }}</a>
+                {% endfor %}
+            </div>
+
+            <!-- Top 3 podium -->
+            {% if users.items|length >= 3 %}
+            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div style="display:flex;align-items:flex-end;justify-content:center;gap:var(--sp-6);padding:var(--sp-8) var(--sp-4);">
+                    {% for idx in [1,0,2] %}
+                    {% set u = users.items[idx] %}
+                    <div style="text-align:center;{% if idx == 0 %}order:2;{% elif idx == 1 %}order:1;{% else %}order:3;{% endif %}">
+                        <div class="avatar-v2 {{ 'avatar-v2--2xl' if idx == 0 else 'avatar-v2--xl' }} avatar-v2--ring" style="margin:0 auto var(--sp-3);{% if idx == 0 %}box-shadow:0 0 24px rgba(245,158,11,.3);{% endif %}">{{ u.username[0]|upper }}</div>
+                        <div style="font-size:{% if idx == 0 %}1.5rem{% else %}1.2rem{% endif %};margin-bottom:var(--sp-1);">{% if idx == 0 %}🥇{% elif idx == 1 %}🥈{% else %}🥉{% endif %}</div>
+                        <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">{{ u.full_name or u.username }}</div>
+                        <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ u.username }}</div>
+                        <div style="font-family:var(--font-display);font-size:var(--text-md);font-weight:700;color:var(--primary-hover);margin-top:var(--sp-2);">{{ u.xp_total }} XP</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Full list -->
+            <div class="card-v2 animate-fade-up">
+                <div style="display:flex;flex-direction:column;">
+                    {% for user in users.items %}
+                    <a href="/{{ user.username }}" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border-subtle);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
+                        <span style="width:32px;font-family:var(--font-display);font-weight:700;font-size:var(--text-sm);color:{% if loop.index <= 3 %}var(--warning){% else %}var(--text-faint){% endif %};text-align:center;">#{{ (users.page - 1) * users.per_page + loop.index }}</span>
+                        <div class="avatar-v2 avatar-v2--sm">{{ user.username[0]|upper }}</div>
+                        <div style="flex:1;min-width:0;">
+                            <span style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</span>
+                            <span style="font-size:var(--text-xs);color:var(--text-muted);margin-left:var(--sp-2);">@{{ user.username }}</span>
+                        </div>
+                        <span class="badge-v2 badge-v2--primary">Lv.{{ user.level }}</span>
+                        <span style="font-family:var(--font-display);font-size:var(--text-sm);font-weight:600;color:var(--primary-hover);min-width:70px;text-align:right;">{{ user.xp_total }} XP</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if users.pages > 1 %}
+            <div style="display:flex;justify-content:center;gap:var(--sp-2);margin-top:var(--sp-6);">
+                {% if users.has_prev %}<a href="?period={{ period }}&page={{ users.prev_num }}" class="btn-v2 btn-v2--secondary btn-v2--sm">← Prev</a>{% endif %}
+                <span style="padding:var(--sp-2) var(--sp-4);font-size:var(--text-sm);color:var(--text-muted);">{{ users.page }}/{{ users.pages }}</span>
+                {% if users.has_next %}<a href="?period={{ period }}&page={{ users.next_num }}" class="btn-v2 btn-v2--primary btn-v2--sm">Next →</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

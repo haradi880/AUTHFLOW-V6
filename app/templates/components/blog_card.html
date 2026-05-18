@@ -1,0 +1,122 @@
+<!-- ═══════ BLOG CARD v2 ═══════ -->
+<article class="blog-card-v2 card-v2 hover-lift" onclick="window.location.href='{{ url_for('blog.blog_detail', slug=blog.slug) }}'">
+    {% if blog.thumbnail %}
+    <div class="blog-card-v2__image">
+        <img src="{{ blog.thumbnail|upload_url('blogs') }}" alt="{{ blog.title }}" loading="lazy">
+        {% if blog.category %}
+        <span class="blog-card-v2__cat badge-v2 badge-v2--primary">{{ blog.category.name }}</span>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="blog-card-v2__body">
+        <div class="blog-card-v2__meta">
+            <a href="/{{ blog.author.username }}" class="blog-card-v2__author" onclick="event.stopPropagation();">
+                <div class="avatar-v2 avatar-v2--xs">{{ blog.author.username[0] | upper }}</div>
+                <span>{{ blog.author.full_name or blog.author.username }}</span>
+            </a>
+            <span class="blog-card-v2__dot">·</span>
+            <time>{{ blog.published_at.strftime('%b %d') if blog.published_at else blog.created_at.strftime('%b %d') }}</time>
+        </div>
+        <h3 class="blog-card-v2__title">{{ blog.title }}</h3>
+        {% if blog.excerpt %}
+        <p class="blog-card-v2__excerpt">{{ blog.excerpt[:120] }}</p>
+        {% endif %}
+        <div class="blog-card-v2__footer">
+            <div class="blog-card-v2__stats">
+                <span data-tooltip="Likes">❤ {{ blog.likes_count }}</span>
+                <span data-tooltip="Comments">💬 {{ blog.comments_count }}</span>
+                <span data-tooltip="Reading time">📖 {{ blog.reading_time }} min</span>
+            </div>
+            {% if blog.tags %}
+            <div class="blog-card-v2__tags">
+                {% for tag in blog.tags[:2] %}
+                <span class="tag-v2">{{ tag.name }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</article>
+
+<style>
+.blog-card-v2 { padding: 0; cursor: pointer; display: flex; flex-direction: column; }
+.blog-card-v2__image {
+    position: relative;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+.blog-card-v2__image img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform var(--dur-slow) var(--ease-out);
+}
+.blog-card-v2:hover .blog-card-v2__image img { transform: scale(1.05); }
+.blog-card-v2__cat {
+    position: absolute;
+    top: var(--sp-3); left: var(--sp-3);
+}
+.blog-card-v2__body {
+    padding: var(--sp-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    flex: 1;
+}
+.blog-card-v2__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+.blog-card-v2__author {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+}
+.blog-card-v2__author:hover { color: var(--primary-hover); }
+.blog-card-v2__dot { color: var(--text-faint); }
+.blog-card-v2__title {
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.blog-card-v2__excerpt {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.blog-card-v2__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-top: auto;
+    padding-top: var(--sp-3);
+    border-top: 1px solid var(--border-subtle);
+}
+.blog-card-v2__stats {
+    display: flex;
+    gap: var(--sp-3);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+}
+.blog-card-v2__tags {
+    display: flex;
+    gap: var(--sp-2);
+}
+</style>

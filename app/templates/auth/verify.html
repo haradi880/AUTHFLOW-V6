@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Verify OTP — AuthFlow{% endblock %}
+
+{% block content %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--sp-6);background:radial-gradient(circle at center, var(--surface-2) 0%, var(--surface-0) 100%);">
+    <div class="card-v2 animate-scale-in" style="width:100%;max-width:400px;padding:var(--sp-8) var(--sp-6);">
+        <div style="text-align:center;margin-bottom:var(--sp-6);">
+            <div class="avatar-v2 avatar-v2--lg" style="margin:0 auto var(--sp-4);">A</div>
+            <h1 style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;color:var(--text-primary);margin-bottom:var(--sp-2);">Check Your Email</h1>
+            <p style="font-size:var(--text-sm);color:var(--text-muted);">Enter the 6-digit code sent to your email.</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div style="padding:var(--sp-3);background:var(--{{ category }}-muted, var(--info-muted));color:var(--{{ category }}, var(--info));border-radius:var(--r-md);font-size:var(--text-sm);margin-bottom:var(--sp-4);text-align:center;">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div style="text-align:center;margin-bottom:var(--sp-6);">
+            <div style="display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-4);background:var(--surface-3);border-radius:var(--r-full);border:1px solid var(--border-subtle);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                <span style="color:var(--text-secondary);font-size:var(--text-sm);font-weight:500;">
+                    {% if session.get('verify_email') %}{{ session.get('verify_email') }}
+                    {% elif session.get('temp_email') %}{{ session.get('temp_email') }}
+                    {% elif session.get('reset_email') %}{{ session.get('reset_email') }}
+                    {% else %}your email{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <form method="POST" action="{{ request.path }}" novalidate style="display:flex;flex-direction:column;gap:var(--sp-4);">
+            <div style="text-align:center;">
+                <div style="display:flex;justify-content:center;gap:var(--sp-2);margin-bottom:var(--sp-4);" id="otpContainer">
+                    <input type="text" class="input-v2 otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" autocomplete="one-time-code" required style="width:48px;height:56px;text-align:center;font-size:var(--text-2xl);font-weight:700;padding:0;border-radius:var(--r-lg);">
+                    <input type="text" class="input-v2 otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" required style="width:48px;height:56px;text-align:center;font-size:var(--text-2xl);font-weight:700;padding:0;border-radius:var(--r-lg);">
+                    <input type="text" class="input-v2 otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" required style="width:48px;height:56px;text-align:center;font-size:var(--text-2xl);font-weight:700;padding:0;border-radius:var(--r-lg);">
+                    <input type="text" class="input-v2 otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" required style="width:48px;height:56px;text-align:center;font-size:var(--text-2xl);font-weight:700;padding:0;border-radius:var(--r-lg);">
+                    <input type="text" class="input-v2 otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" required style="width:48px;height:56px;text-align:center;font-size:var(--text-2xl);font-weight:700;padding:0;border-radius:var(--r-lg);">
+                    <input type="text" class="input-v2 otp-input" maxlength="1" pattern="[0-9]" inputmode="numeric" required style="width:48px;height:56px;text-align:center;font-size:var(--text-2xl);font-weight:700;padding:0;border-radius:var(--r-lg);">
+                </div>
+                <input type="hidden" name="otp" id="completeOTP">
+            </div>
+
+            <button type="submit" class="btn-v2 btn-v2--primary btn-v2--lg" style="margin-top:var(--sp-2);">Verify Code</button>
+        </form>
+
+        <div style="text-align:center;margin-top:var(--sp-6);font-size:var(--text-sm);color:var(--text-muted);">
+            Didn't receive the code? 
+            <span id="resendTimer">Resend in <span id="timerCount" style="font-variant-numeric:tabular-nums;font-weight:600;">60</span>s</span>
+            <button type="button" id="resendLink" style="color:var(--primary-hover);text-decoration:none;font-weight:500;background:transparent;border:0;cursor:pointer;display:none;padding:0;" onclick="resendOTP(event)">Resend code</button>
+        </div>
+
+        <div style="text-align:center;margin-top:var(--sp-6);">
+            <a href="{{ url_for('auth.login') }}" style="display:inline-flex;align-items:center;gap:var(--sp-2);color:var(--text-secondary);text-decoration:none;font-size:var(--text-sm);font-weight:500;transition:color var(--dur-fast);" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Back to login
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const inputs = document.querySelectorAll('.otp-input');
+    inputs.forEach((input, index) => {
+        input.addEventListener('input', (e) => {
+            if (e.target.value.length > 1) {
+                e.target.value = e.target.value.slice(0, 1);
+            }
+            if (e.target.value !== '' && index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            }
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && e.target.value === '' && index > 0) {
+                inputs[index - 1].focus();
+            }
+        });
+        // Handle paste
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+            pastedData.split('').forEach((char, i) => {
+                if (inputs[i]) {
+                    inputs[i].value = char;
+                    if (i < inputs.length - 1) inputs[i + 1].focus();
+                }
+            });
+        });
+    });
+
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const otpInputs = document.querySelectorAll('.otp-input');
+        const completeOTP = Array.from(otpInputs).map(input => input.value).join('');
+        document.getElementById('completeOTP').value = completeOTP;
+        
+        if (completeOTP.length !== 6) {
+            e.preventDefault();
+            if(window.toast) toast.show('Please enter the complete 6-digit code', 'error');
+            else alert('Please enter the complete 6-digit code');
+        }
+    });
+
+    let timeLeft = 60;
+    const timerElement = document.getElementById('timerCount');
+    const resendTimer = document.getElementById('resendTimer');
+    const resendLink = document.getElementById('resendLink');
+    
+    const countdown = setInterval(() => {
+        timeLeft--;
+        if (timerElement) timerElement.textContent = timeLeft;
+        if (timeLeft <= 0) {
+            clearInterval(countdown);
+            resendTimer.style.display = 'none';
+            resendLink.style.display = 'inline-block';
+        }
+    }, 1000);
+
+    function resendOTP(e) {
+        e.preventDefault();
+        if(window.toast) toast.show('New code sent to your email', 'success');
+        timeLeft = 60;
+        resendTimer.style.display = 'inline';
+        resendLink.style.display = 'none';
+        
+        document.querySelectorAll('.otp-input').forEach(input => input.value = '');
+        document.querySelector('.otp-input').focus();
+        
+        fetch('{{ url_for("auth.resend_otp") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ purpose: '{{ "password_reset" if session.get("reset_email") else "email_verification" }}' })
+        }).catch(() => {});
+        
+        const newCountdown = setInterval(() => {
+            timeLeft--;
+            if (timerElement) timerElement.textContent = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(newCountdown);
+                resendTimer.style.display = 'none';
+                resendLink.style.display = 'inline-block';
+            }
+        }, 1000);
+    }
+    
+    setTimeout(() => { if(inputs[0]) inputs[0].focus(); }, 100);
+</script>
+{% endblock %}

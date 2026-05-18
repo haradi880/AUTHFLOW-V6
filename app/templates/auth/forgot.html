@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Forgot Password — AuthFlow{% endblock %}
+
+{% block content %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--sp-6);background:radial-gradient(circle at center, var(--surface-2) 0%, var(--surface-0) 100%);">
+    <div class="card-v2 animate-scale-in" style="width:100%;max-width:400px;padding:var(--sp-8) var(--sp-6);">
+        <div style="text-align:center;margin-bottom:var(--sp-6);">
+            <div class="avatar-v2 avatar-v2--lg" style="margin:0 auto var(--sp-4);">A</div>
+            <h1 style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;color:var(--text-primary);margin-bottom:var(--sp-2);">Forgot Password</h1>
+            <p style="font-size:var(--text-sm);color:var(--text-muted);">Enter your email and we'll send a code to reset it.</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div style="padding:var(--sp-3);background:var(--{{ category }}-muted, var(--info-muted));color:var(--{{ category }}, var(--info));border-radius:var(--r-md);font-size:var(--text-sm);margin-bottom:var(--sp-4);text-align:center;">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('auth.forgot_password') }}" style="display:flex;flex-direction:column;gap:var(--sp-4);">
+            <div>
+                <label for="email" style="display:block;font-size:var(--text-sm);font-weight:500;color:var(--text-primary);margin-bottom:var(--sp-2);">Email Address</label>
+                <input type="email" id="email" name="email" class="input-v2" placeholder="you@example.com" required autocomplete="email" autofocus>
+            </div>
+            
+            <button type="submit" class="btn-v2 btn-v2--primary btn-v2--lg" style="margin-top:var(--sp-2);">Send Reset Code</button>
+        </form>
+
+        <div style="text-align:center;margin-top:var(--sp-6);font-size:var(--text-sm);color:var(--text-muted);">
+            Remember your password? <a href="{{ url_for('auth.login') }}" style="color:var(--primary-hover);text-decoration:none;font-weight:500;">Sign in</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "auth/verify.html" %}
+
+{% block title %}Verify Reset Code - AuthFlow{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+    window.resetOtpPurpose = 'password_reset';
+</script>
+{% endblock %}

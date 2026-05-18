@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Blogs — AuthFlow{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/feed.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Discover</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">Explore Blogs</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                {% if session.get('user') %}
+                <a href="{{ url_for('blog.create_blog') }}" class="btn-v2 btn-v2--primary btn-v2--sm">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Write Blog
+                </a>
+                {% endif %}
+            </div>
+        </nav>
+
+        <div class="app-content">
+            <!-- Hero -->
+            <section class="hero-v2 animate-fade-up">
+                <div class="hero-v2__eyebrow">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Community Writing
+                </div>
+                <h2 class="hero-v2__title">Practical notes, build logs, and deep dives from developers.</h2>
+            </section>
+
+            <!-- Filters -->
+            <div class="card-v2" style="margin-bottom:var(--sp-5);padding:var(--sp-4);">
+                <form method="GET" action="{{ url_for('blog.blogs_feed') }}" style="display:flex;gap:var(--sp-3);flex-wrap:wrap;align-items:center;">
+                    <div style="flex:1;min-width:200px;position:relative;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        <input type="text" class="input-v2" name="q" value="{{ request.args.get('q', '') }}" placeholder="Search blogs..." style="padding-left:36px;">
+                    </div>
+                    <select class="input-v2" name="sort" onchange="this.form.submit()" style="width:auto;min-width:120px;">
+                        <option value="latest" {{ 'selected' if request.args.get('sort', 'latest') == 'latest' }}>Latest</option>
+                        <option value="trending" {{ 'selected' if request.args.get('sort') == 'trending' }}>Trending</option>
+                        <option value="most_read" {{ 'selected' if request.args.get('sort') == 'most_read' }}>Most Read</option>
+                        <option value="most_liked" {{ 'selected' if request.args.get('sort') == 'most_liked' }}>Most Liked</option>
+                    </select>
+                    <select class="input-v2" name="category" onchange="this.form.submit()" style="width:auto;min-width:140px;">
+                        <option value="">All Categories</option>
+                        {% for category in categories %}
+                        <option value="{{ category.slug }}" {{ 'selected' if request.args.get('category') == category.slug }}>{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-v2 btn-v2--secondary btn-v2--sm">Apply</button>
+                </form>
+            </div>
+
+            <!-- Featured Blog -->
+            {% if featured_blog %}
+            <div class="card-v2 hover-lift animate-fade-up" style="padding:0;margin-bottom:var(--sp-6);cursor:pointer;overflow:hidden;" onclick="window.location.href='{{ url_for('blog.blog_detail', slug=featured_blog.slug) }}'">
+                <div style="display:flex;align-items:stretch;">
+                    <div style="flex:1;padding:var(--sp-6);display:flex;flex-direction:column;justify-content:center;gap:var(--sp-3);">
+                        <span class="badge-v2 badge-v2--accent" style="align-self:flex-start;">⭐ Featured</span>
+                        <h2 style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:700;color:var(--text-primary);line-height:1.3;">{{ featured_blog.title }}</h2>
+                        <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;">{{ featured_blog.excerpt[:150] }}...</p>
+                        <div style="display:flex;align-items:center;gap:var(--sp-2);font-size:var(--text-xs);color:var(--text-faint);">
+                            <div class="avatar-v2 avatar-v2--xs">{{ featured_blog.author.username[0]|upper }}</div>
+                            <span>{{ featured_blog.author.username }} · {{ featured_blog.reading_time }} min read</span>
+                        </div>
+                    </div>
+                    {% if featured_blog.thumbnail %}
+                    <div style="width:300px;flex-shrink:0;" class="hide-mobile">
+                        <img src="{{ featured_blog.thumbnail|upload_url('blogs') }}" alt="{{ featured_blog.title }}" loading="lazy" style="width:100%;height:100%;object-fit:cover;">
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Trending Tags -->
+            {% if trending_tags %}
+            <div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-5);">
+                <span style="font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Trending:</span>
+                {% for tag in trending_tags %}
+                <a href="{{ url_for('blog.blogs_feed', tag=tag.slug) }}" class="tag-v2">#{{ tag.name }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Blog Grid -->
+            <div class="grid-auto stagger">
+                {% for blog in blogs %}
+                    {% include 'components/blog_card.html' %}
+                {% else %}
+                <div class="empty-v2" style="grid-column:1/-1;">
+                    <div class="empty-v2__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                    <div class="empty-v2__title">No blogs match this view yet</div>
+                    <div class="empty-v2__desc">Try adjusting your filters or write the first blog!</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if pagination.has_next %}
+            <div style="display:flex;justify-content:center;margin-top:var(--sp-8);">
+                <a class="btn-v2 btn-v2--secondary" href="{{ url_for('blog.blogs_feed', page=pagination.next_num, q=request.args.get('q'), category=request.args.get('category'), tag=request.args.get('tag'), sort=request.args.get('sort', 'latest')) }}">
+                    Load More Articles →
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/feed.js') }}"></script>
+{% endblock %}
