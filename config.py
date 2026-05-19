@@ -49,6 +49,8 @@ class Config:
     _upload_folder = Path(os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "uploads")))
     UPLOAD_FOLDER = str(_upload_folder if _upload_folder.is_absolute() else BASE_DIR / _upload_folder)
     MAX_CONTENT_LENGTH = _env_int("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)
+    MAX_UPLOAD_BYTES = _env_int("MAX_UPLOAD_BYTES", MAX_CONTENT_LENGTH)
+    MAX_IMAGE_PIXELS = _env_int("MAX_IMAGE_PIXELS", 24_000_000)
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
     ALLOWED_VIDEO_EXTENSIONS = {"mp4", "webm", "mov"}
 
@@ -96,6 +98,10 @@ class Config:
     LOGIN_LOCK_MINUTES = _env_int("LOGIN_LOCK_MINUTES", 15)
     ITEMS_PER_PAGE = _env_int("ITEMS_PER_PAGE", 12)
     JWT_EXPIRATION_HOURS = _env_int("JWT_EXPIRATION_HOURS", 24)
+    RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI") or "memory://"
+    REDIS_URL = os.getenv("REDIS_URL") or os.getenv("RATELIMIT_STORAGE_URI") or "redis://localhost:6379/0"
+    TASK_QUEUE_ASYNC = _env_bool("TASK_QUEUE_ASYNC", False)
+    NOTIFICATION_MAX_RETRIES = _env_int("NOTIFICATION_MAX_RETRIES", 3)
 
     SECURITY_HEADERS = {
         "X-Content-Type-Options": "nosniff",

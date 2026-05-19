@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Applications - {{ job.title }} - AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hiring.css') }}">
+{% endblock %}
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left"><div class="topnav-v2__breadcrumb"><a class="topnav-v2__kicker" href="{{ url_for('hiring.job_detail', slug=job.slug) }}">{{ job.title[:34] }}</a><span class="topnav-v2__sep">/</span><span class="topnav-v2__title">Applications</span></div></div>
+        </nav>
+        <div class="app-content" style="max-width:1040px;">
+            <form method="get" class="hiring-filters" style="grid-template-columns:minmax(180px,240px) auto;">
+                <label><span class="sr-only">Status</span><select name="status"><option value="">All statuses</option>{% for status in statuses %}<option value="{{ status }}" {{ 'selected' if current_status == status }}>{{ status|replace('-',' ')|title }}</option>{% endfor %}</select></label>
+                <button class="btn-v2 btn-v2--primary">Filter</button>
+            </form>
+            <div class="job-results">
+                {% for application in applications.items %}
+                <article class="card-v2" style="display:grid;gap:var(--sp-4);">
+                    <div style="display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;">
+                        <div>
+                            <h2 style="font-size:var(--text-lg);margin-bottom:var(--sp-1);">{{ application.user.full_name or application.user.username }}</h2>
+                            <p style="margin:0;color:var(--text-muted);">{{ application.user.headline or application.user.email }}</p>
+                        </div>
+                        <span class="badge-v2 badge-v2--primary">{{ application.status|replace('-',' ')|title }}</span>
+                    </div>
+                    {% if application.cover_note %}<p style="margin:0;color:var(--text-secondary);line-height:1.6;">{{ application.cover_note }}</p>{% endif %}
+                    <form method="post" action="{{ url_for('hiring.update_application_status', application_id=application.id) }}" style="display:grid;grid-template-columns:180px minmax(0,1fr) auto;gap:var(--sp-3);align-items:end;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <label class="form-group-v2"><span class="label-v2">Status</span><select class="input-v2" name="status">{% for status in statuses if status != 'withdrawn' %}<option value="{{ status }}" {{ 'selected' if application.status == status }}>{{ status|replace('-',' ')|title }}</option>{% endfor %}</select></label>
+                        <label class="form-group-v2"><span class="label-v2">Recruiter note</span><input class="input-v2" name="recruiter_response" maxlength="1000" value="{{ application.recruiter_response or '' }}"></label>
+                        <button class="btn-v2 btn-v2--primary">Update</button>
+                    </form>
+                </article>
+                {% else %}
+                <div class="empty-v2"><div class="empty-v2__title">No applications yet</div><div class="empty-v2__desc">Applicants will appear here as soon as they apply.</div></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -11,7 +11,7 @@ reputation_bp = Blueprint("reputation", __name__)
 
 @reputation_bp.get("/reputation")
 def index():
-    top_users = User.query.filter_by(active=True).order_by(User.xp_total.desc()).limit(20).all()
+    top_users = User.query.filter(User.active.is_(True)).order_by(User.xp_total.desc()).limit(20).all()
     badges = Badge.query.order_by(Badge.tier.desc(), Badge.name).all()
 
     user_badges = []
@@ -35,9 +35,9 @@ def leaderboard():
     page = request.args.get("page", 1, type=int)
 
     if period == "alltime":
-        users = User.query.filter_by(active=True).order_by(User.xp_total.desc()).paginate(page=page, per_page=50, error_out=False)
+        users = User.query.filter(User.active.is_(True)).order_by(User.xp_total.desc()).paginate(page=page, per_page=50, error_out=False)
     else:
-        users = User.query.filter_by(active=True).order_by(User.xp_total.desc()).paginate(page=page, per_page=50, error_out=False)
+        users = User.query.filter(User.active.is_(True)).order_by(User.xp_total.desc()).paginate(page=page, per_page=50, error_out=False)
 
     return render_template("reputation/leaderboard.html", users=users, period=period)
 
@@ -49,7 +49,7 @@ def heatmap_data(username):
     from datetime import datetime, timedelta
     from collections import defaultdict
 
-    user = User.query.filter_by(username=username, active=True).first_or_404()
+    user = User.query.filter(User.username == username, User.active.is_(True)).first_or_404()
     end = datetime.utcnow().date()
     start = end - timedelta(days=365)
 

@@ -5,6 +5,7 @@ Handles validation, naming, and saving of uploaded files.
 
 import os
 import secrets
+from pathlib import Path
 from PIL import Image
 from flask import current_app
 from werkzeug.utils import secure_filename
@@ -94,9 +95,12 @@ def save_media_upload(file, folder='devlogs', max_size=(1400, 1400)):
         return None, None
 
     filename = generate_filename(file.filename)
-    upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], folder)
-    os.makedirs(upload_folder, exist_ok=True)
-    filepath = os.path.join(upload_folder, filename)
+    upload_root = Path(current_app.config['UPLOAD_FOLDER']).resolve()
+    upload_folder = (upload_root / folder).resolve()
+    if upload_root not in upload_folder.parents and upload_folder != upload_root:
+        return None
+    upload_folder.mkdir(parents=True, exist_ok=True)
+    filepath = upload_folder / filename
     media_type = media_type_for(filename)
 
     try:
@@ -107,8 +111,8 @@ def save_media_upload(file, folder='devlogs', max_size=(1400, 1400)):
         return filename, media_type
     except Exception as e:
         current_app.logger.warning("Error saving media upload: %s", e)
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        if filepath.exists():
+            filepath.unlink(missing_ok=True)
         return None, None
 
 
@@ -143,6 +147,7 @@ def resize_image(filepath, max_size):
         max_size: Tuple of (max_width, max_height)
     """
     try:
+        Image.MAX_IMAGE_PIXELS = current_app.config.get("MAX_IMAGE_PIXELS", 24_000_000)
         img = Image.open(filepath)
         
         # Only resize if image is larger than max_size
@@ -154,6 +159,7 @@ def resize_image(filepath, max_size):
 
 
 def validate_image(filepath):
+    Image.MAX_IMAGE_PIXELS = current_app.config.get("MAX_IMAGE_PIXELS", 24_000_000)
     with Image.open(filepath) as img:
         img.verify()
 
@@ -167,6 +173,13 @@ def delete_file(filename, folder):
         folder: Subfolder where the file is stored
     """
     if filename and filename not in {'default.jpg', 'default_banner.jpg'}:
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], folder, filename)
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        if Path(filename).name != filename or folder not in ALLOWED_UPLOAD_FOLDERS:
+            current_app.logger.warning("Blocked unsafe delete path: %s/%s", folder, filename)
+            return
+        upload_root = Path(current_app.config['UPLOAD_FOLDER']).resolve()
+        filepath = (upload_root / folder / filename).resolve()
+        if upload_root not in filepath.parents:
+            current_app.logger.warning("Blocked delete outside upload root: %s", filename)
+            return
+        if filepath.exists():
+            filepath.unlink()

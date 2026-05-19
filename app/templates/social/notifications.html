@@ -17,6 +17,7 @@
             </div>
             <div class="topnav-v2__right">
                 {% if notifications %}
+                <button id="markNotificationsRead" class="btn-v2 btn-v2--secondary btn-v2--sm">Mark read</button>
                 <button id="clearNotifications" class="btn-v2 btn-v2--secondary btn-v2--sm" style="color:var(--error);">Clear All</button>
                 {% endif %}
             </div>
@@ -73,6 +74,16 @@ document.getElementById('clearNotifications')?.addEventListener('click', async (
         const response = await fetch("{{ url_for('social.clear_notifications') }}", {
             method: 'POST',
             headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+        });
+        if (response.ok) window.location.reload();
+    } catch (e) {}
+});
+document.getElementById('markNotificationsRead')?.addEventListener('click', async () => {
+    try {
+        const response = await fetch("{{ url_for('social.mark_notifications_read') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+            body: JSON.stringify({})
         });
         if (response.ok) window.location.reload();
     } catch (e) {}

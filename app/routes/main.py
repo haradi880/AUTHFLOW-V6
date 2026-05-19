@@ -2,15 +2,22 @@
 Main Routes - Home page, profiles, search, settings.
 """
 
+import base64
 import io
+import secrets
+from decimal import Decimal, InvalidOperation
+from datetime import datetime
+
 import qrcode
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify
-from flask_login import current_user, login_required
+from flask_login import current_user, login_required, logout_user
 
 from app.extensions import db
-from app.models import User, Blog, Project, Category, Tag, Notification, Bookmark, Follow, Block, Report, DevLog, RoboticsProject, Job
+from app.models import User, Blog, Project, Category, Tag, Notification, Bookmark, Follow, Block, Report, DevLog, RoboticsProject, Job, LoginEvent, LoginSession, DonationIntent
 from app.services.auth import issue_otp, normalize_email, validate_password_strength, verify_otp
 from app.services.gamification import maybe_award_profile_completion
+from app.services.security import revoke_all_sessions, revoke_other_sessions, revoke_session
+from app.utils.audit import AuditEventType, audit_log, get_client_ip
 from app.utils.rate_limit import rate_limit
 from app.utils.helpers import format_datetime, paginate
 from app.utils.uploads import save_upload, delete_file
@@ -339,28 +346,43 @@ def faq():
     return render_template('legal/faq.html')
 
 
+@main_bp.get('/healthz')
+def healthz():
+    return jsonify({"ok": True, "status": "healthy"})
+
+
 @main_bp.route('/api/generate-qr', methods=['POST'])
+@rate_limit(max_calls=12, window_seconds=300, scope="donation-qr")
 def generate_qr():
     """Generate QR code for specified amount."""
     data = request.get_json(silent=True) or {}
     amount = data.get('amount', 49)
-    
+
     try:
-        amount = float(amount)
-        if amount < 1 or amount > 999999:
+        amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+        if amount < Decimal("1.00") or amount > Decimal("999999.00"):
             return {'error': 'Invalid amount'}, 400
-    except (ValueError, TypeError):
+    except (InvalidOperation, ValueError, TypeError):
         return {'error': 'Invalid amount'}, 400
-    
-    # UPI payment details
-    upi_id = "llaka2937-1@okicici"
-    upi_name = "ADITYA"
-    upi_aid = "uGICAgMDW4Y2rTQ"
-    
-    # UPI link with amount in format X.00
-    upi_link = f"upi://pay?pa={upi_id}&pn={upi_name}&am={amount:.2f}&cu=INR&aid={upi_aid}"
-    
-    # Generate QR code
+
+    upi_link = (
+        f"upi://pay?"
+        f"pa=llaka2937-1@okicici"
+        f"&pn=ADITYA"
+        f"&am={amount}"
+        f"&cu=INR"
+    )
+    intent = DonationIntent(
+        public_id=secrets.token_urlsafe(24),
+        user_id=current_user.id if current_user.is_authenticated else None,
+        amount=amount,
+        upi_url=upi_link,
+        ip_address=get_client_ip(),
+        user_agent=(request.headers.get("User-Agent") or "")[:500],
+    )
+    db.session.add(intent)
+    db.session.commit()
+
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -375,16 +397,34 @@ def generate_qr():
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format='PNG')
     img_byte_arr.seek(0)
-    
-    import base64
+
     qr_code_base64 = base64.b64encode(img_byte_arr.getvalue()).decode()
-    
+
     return {
         'success': True,
         'qr_code': qr_code_base64,
         'upi_link': upi_link,
-        'amount': amount
+        'amount': str(amount),
+        'donation_id': intent.public_id,
     }
+
+
+@main_bp.post('/support/donations/<public_id>/complete')
+@rate_limit(max_calls=10, window_seconds=300, scope="donation-complete")
+def complete_donation(public_id):
+    intent = DonationIntent.query.filter_by(public_id=public_id).first_or_404()
+    if intent.status == "qr_generated":
+        intent.status = "user_marked_paid"
+        intent.completed_at = datetime.utcnow()
+        db.session.commit()
+    return redirect(url_for('main.support_success', donation_id=intent.public_id))
+
+
+@main_bp.get('/support/success')
+def support_success():
+    donation_id = request.args.get("donation_id", "")
+    intent = DonationIntent.query.filter_by(public_id=donation_id).first() if donation_id else None
+    return render_template('legal/support_success.html', donation=intent)
 # SETTINGS
 # ============================================================
 
@@ -392,7 +432,17 @@ def generate_qr():
 @login_required
 def settings():
     """User settings page."""
-    return render_template('profile/settings.html', user=current_user)
+    login_sessions = LoginSession.query.filter_by(user_id=current_user.id).order_by(LoginSession.revoked_at.isnot(None), LoginSession.last_seen_at.desc()).limit(20).all()
+    login_events = LoginEvent.query.filter_by(user_id=current_user.id).order_by(LoginEvent.created_at.desc()).limit(30).all()
+    donations = DonationIntent.query.filter_by(user_id=current_user.id).order_by(DonationIntent.created_at.desc()).limit(10).all()
+    return render_template(
+        'profile/settings.html',
+        user=current_user,
+        login_sessions=login_sessions,
+        login_events=login_events,
+        donations=donations,
+        current_login_session_id=session.get("login_session_id"),
+    )
 
 
 @main_bp.post('/settings/preferences')
@@ -425,6 +475,7 @@ def change_password():
     current_user.set_password(new_password)
     current_user.clear_failed_logins()
     db.session.commit()
+    audit_log(AuditEventType.PASSWORD_CHANGED, description="Password changed from settings")
     flash('Password changed successfully.', 'success')
     return redirect(url_for('main.settings'))
 
@@ -453,6 +504,7 @@ def verify_email_change():
         current_user.email = current_user.pending_email
         current_user.pending_email = None
         db.session.commit()
+        audit_log(AuditEventType.EMAIL_CHANGED, description="Email address changed from settings")
         flash('Email updated.', 'success')
     else:
         flash('Invalid or expired email verification code.', 'error')
@@ -462,9 +514,31 @@ def verify_email_change():
 @main_bp.post('/settings/logout-devices')
 @login_required
 def logout_all_devices():
-    session.clear()
-    flash('You have been logged out on this browser. Rotate SECRET_KEY to invalidate all sessions globally.', 'info')
+    revoke_all_sessions(current_user)
+    logout_user()
+    flash('All sessions were logged out.', 'info')
     return redirect(url_for('auth.login'))
+
+
+@main_bp.post('/settings/logout-other-devices')
+@login_required
+def logout_other_devices():
+    count = revoke_other_sessions(current_user)
+    flash(f'Logged out {count} other active device{"s" if count != 1 else ""}.', 'success')
+    return redirect(url_for('main.settings'))
+
+
+@main_bp.post('/settings/devices/<public_id>/revoke')
+@login_required
+def revoke_device(public_id):
+    if public_id == session.get("login_session_id"):
+        flash('Use logout to end your current session.', 'warning')
+        return redirect(url_for('main.settings'))
+    if revoke_session(current_user, public_id):
+        flash('Device session revoked.', 'success')
+    else:
+        flash('Device session was not found.', 'error')
+    return redirect(url_for('main.settings'))
 
 
 @main_bp.get('/settings/export')
@@ -500,6 +574,11 @@ def privacy():
 @main_bp.route('/terms')
 def terms():
     return render_template('legal/terms.html')
+
+
+@main_bp.route('/cookies')
+def cookies():
+    return render_template('legal/cookies.html')
 
 
 @main_bp.route('/following')

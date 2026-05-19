@@ -1,14 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Terms - AuthFlow{% endblock %}
+{% block title %}Terms and Conditions - AuthFlow{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
 {% block content %}
-<main class="main-content" style="margin-left: 0; max-width: 900px; margin-inline: auto;">
+<main class="main-content" style="margin-left:0;max-width:920px;margin-inline:auto;padding:var(--sp-6);">
     <section class="content-card">
-        <h1 class="page-title">Terms</h1>
-        <p>Use AuthFlow to publish your own work, showcase projects, follow developers, save posts, and communicate respectfully.</p>
-        <p>Do not upload illegal, abusive, spammy, deceptive, or infringing content. Reports and blocks may be reviewed by moderators.</p>
-        <p>The platform may rate limit activity such as login, OTP requests, comments, messages, follows, and reports to protect users and reduce spam.</p>
-        <p>Public profiles, blogs, projects, likes, views, and follows may be visible to other users. Private messages should not be shared without permission.</p>
+        <h1 class="page-title">Terms and Conditions</h1>
+        <p>AuthFlow is a professional platform for publishing work, discovering talent, applying to jobs, recruiting, messaging, and collaborating in teams.</p>
+        <h2>Acceptable Use</h2>
+        <p>Do not upload illegal, abusive, spammy, deceptive, infringing, malicious, or privacy-invasive content. Do not scrape, harass, impersonate others, bypass rate limits, attack the service, or use the platform for unauthorized recruiting or data brokerage.</p>
+        <h2>Hiring And Collaboration</h2>
+        <p>Job posts, applications, recruiter responses, team invitations, and collaboration requests must be truthful and professional. Recruiters are responsible for lawful hiring practices, candidate privacy, and honoring applicable employment regulations.</p>
+        <h2>User Content</h2>
+        <p>You retain ownership of your content, but grant the platform a limited license to host, display, process, and distribute it as needed to operate the service. Public profiles, blogs, projects, follows, likes, and job posts may be visible to other users.</p>
+        <h2>Moderation And Enforcement</h2>
+        <p>The platform may remove content, restrict accounts, suspend access, preserve records, or review reports and blocks to protect users and comply with legal obligations.</p>
+        <h2>Security</h2>
+        <p>Users must protect their account credentials and report suspected unauthorized access. The platform may rate limit login, OTP, comments, messages, follows, reports, hiring, and collaboration actions.</p>
+        <h2>Disclaimers</h2>
+        <p>The service is provided as available. AuthFlow does not guarantee job outcomes, candidate quality, continuous uptime, third-party links, or content accuracy.</p>
         <a href="{{ url_for('main.home') }}" class="btn btn-primary">Back Home</a>
     </section>
 </main>

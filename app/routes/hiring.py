@@ -1,11 +1,14 @@
 """Hiring ecosystem blueprint: job board, talent search, applications."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from datetime import datetime
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import Company, Job, JobApplication, JobSave, User
 from app.services.content import generate_slug
+from app.services.notifications import create_notification
 
 hiring_bp = Blueprint("hiring", __name__)
 
@@ -13,6 +16,7 @@ CATEGORIES = ["robotics", "ai-ml", "web", "mobile", "devops", "data-science", "e
 JOB_TYPES = ["full-time", "part-time", "contract", "internship", "freelance"]
 WORK_MODES = ["remote", "onsite", "hybrid"]
 EXPERIENCE_LEVELS = ["entry", "mid", "senior", "lead"]
+APPLICATION_STATUSES = ["applied", "reviewed", "shortlisted", "interview", "offer", "rejected", "hired", "withdrawn"]
 
 
 def _choice(value, allowed, default):
@@ -35,7 +39,7 @@ def index():
     work_mode = request.args.get("mode", "")
     query = request.args.get("q", "").strip()
 
-    q = Job.query.filter_by(status="active")
+    q = Job.query.filter_by(status="active").join(Company)
     if category:
         q = q.filter_by(category=category)
     if job_type:
@@ -43,7 +47,16 @@ def index():
     if work_mode:
         q = q.filter_by(work_mode=work_mode)
     if query:
-        q = q.filter(Job.title.ilike(f"%{query}%"))
+        search = f"%{query}%"
+        q = q.filter(
+            db.or_(
+                Job.title.ilike(search),
+                Job.description.ilike(search),
+                Job.skills_required.ilike(search),
+                Company.name.ilike(search),
+                Job.location.ilike(search),
+            )
+        )
 
     jobs = q.order_by(Job.created_at.desc()).paginate(page=page, per_page=12, error_out=False)
 
@@ -66,17 +79,22 @@ def job_detail(slug):
     job.views_count = (job.views_count or 0) + 1
     db.session.commit()
     has_applied = False
+    application = None
     is_saved = False
     if current_user.is_authenticated:
-        has_applied = JobApplication.query.filter_by(job_id=job.id, user_id=current_user.id).first() is not None
+        application = JobApplication.query.filter_by(job_id=job.id, user_id=current_user.id).first()
+        has_applied = application is not None
         is_saved = JobSave.query.filter_by(job_id=job.id, user_id=current_user.id).first() is not None
-    return render_template("hiring/job_detail.html", job=job, has_applied=has_applied, is_saved=is_saved)
+    return render_template("hiring/job_detail.html", job=job, has_applied=has_applied, application=application, is_saved=is_saved)
 
 
 @hiring_bp.post("/hiring/apply/<int:job_id>")
 @login_required
 def apply_job(job_id):
     job = Job.query.get_or_404(job_id)
+    if job.status != "active":
+        flash("This job is no longer accepting applications.", "warning")
+        return redirect(url_for("hiring.job_detail", slug=job.slug))
     existing = JobApplication.query.filter_by(job_id=job.id, user_id=current_user.id).first()
     if existing:
         flash("You already applied to this job.", "warning")
@@ -89,9 +107,110 @@ def apply_job(job_id):
     )
     job.applications_count = (job.applications_count or 0) + 1
     db.session.add(app)
+    db.session.flush()
+    applicant_link = url_for("hiring.my_applications", _external=False)
+    recruiter_link = url_for("hiring.job_applications", job_id=job.id, _external=False)
+    create_notification(
+        user=current_user,
+        action="job_application_submitted",
+        message=f"Your application for {job.title} at {job.company.name if job.company else 'the company'} was submitted.",
+        link=applicant_link,
+        from_user=job.posted_by,
+        commit=False,
+        priority="high",
+        entity_type="job_application",
+        entity_id=app.id,
+    )
+    if job.posted_by and job.posted_by_id != current_user.id:
+        create_notification(
+            user=job.posted_by,
+            action="job_application_received",
+            message=f"{current_user.username} applied for {job.title}.",
+            link=recruiter_link,
+            from_user=current_user,
+            commit=False,
+            priority="high",
+            entity_type="job_application",
+            entity_id=app.id,
+        )
     db.session.commit()
-    flash("Application submitted.", "success")
+    flash("Application submitted. You can track its status from My Applications.", "success")
     return redirect(url_for("hiring.job_detail", slug=job.slug))
+
+
+@hiring_bp.get("/hiring/applications")
+@login_required
+def my_applications():
+    page = request.args.get("page", 1, type=int)
+    status = request.args.get("status", "")
+    query = JobApplication.query.filter_by(user_id=current_user.id).join(Job).join(Company)
+    if status in APPLICATION_STATUSES:
+        query = query.filter(JobApplication.status == status)
+    applications = query.order_by(JobApplication.updated_at.desc()).paginate(page=page, per_page=12, error_out=False)
+    return render_template(
+        "hiring/applications.html",
+        applications=applications,
+        statuses=APPLICATION_STATUSES,
+        current_status=status,
+    )
+
+
+@hiring_bp.get("/hiring/jobs/<int:job_id>/applications")
+@login_required
+def job_applications(job_id):
+    job = Job.query.get_or_404(job_id)
+    if not job.user_can_manage(current_user):
+        abort(403)
+    page = request.args.get("page", 1, type=int)
+    status = request.args.get("status", "")
+    query = JobApplication.query.filter_by(job_id=job.id).join(User)
+    if status in APPLICATION_STATUSES:
+        query = query.filter(JobApplication.status == status)
+    applications = query.order_by(JobApplication.updated_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    return render_template(
+        "hiring/manage_applications.html",
+        job=job,
+        applications=applications,
+        statuses=APPLICATION_STATUSES,
+        current_status=status,
+    )
+
+
+@hiring_bp.post("/hiring/applications/<int:application_id>/status")
+@login_required
+def update_application_status(application_id):
+    application = JobApplication.query.get_or_404(application_id)
+    job = application.job
+    if not job.user_can_manage(current_user):
+        abort(403)
+
+    status = request.form.get("status", "").strip()
+    if status not in APPLICATION_STATUSES or status == "withdrawn":
+        flash("Choose a valid application status.", "error")
+        return redirect(url_for("hiring.job_applications", job_id=job.id))
+
+    response = request.form.get("recruiter_response", "").strip()[:1000]
+    application.status = status
+    application.recruiter_response = response
+    application.status_changed_at = datetime.utcnow()
+    application.reviewed_by_id = current_user.id
+    message = f"Your application for {job.title} is now {status.replace('-', ' ')}."
+    if response:
+        message = f"{message} Recruiter note: {response[:180]}"
+    create_notification(
+        user=application.user,
+        action="job_application_status",
+        message=message,
+        link=url_for("hiring.my_applications"),
+        from_user=current_user,
+        commit=False,
+        priority="high",
+        entity_type="job_application",
+        entity_id=application.id,
+    )
+    db.session.commit()
+    flash("Application status updated and the applicant was notified.", "success")
+    return redirect(url_for("hiring.job_applications", job_id=job.id))
 
 
 @hiring_bp.post("/hiring/save/<int:job_id>")
@@ -181,7 +300,11 @@ def talent_search():
     query = request.args.get("q", "").strip()
     skill = request.args.get("skill", "").strip()
 
-    q = User.query.filter_by(active=True, is_verified=True, open_to_work=True)
+    q = User.query.filter(
+        User.active.is_(True),
+        User.is_verified.is_(True),
+        User.open_to_work.is_(True),
+    )
     if query:
         q = q.filter(
             db.or_(

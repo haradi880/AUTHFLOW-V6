@@ -86,7 +86,7 @@ def index():
         .limit(12)
         .all()
     )
-    top_creators = User.query.filter_by(active=True).order_by(User.xp_total.desc(), User.created_at.desc()).limit(6).all()
+    top_creators = User.query.filter(User.active.is_(True)).order_by(User.xp_total.desc(), User.created_at.desc()).limit(6).all()
     top_projects = Project.query.filter_by(status="published").order_by(Project.stars_count.desc(), Project.created_at.desc()).limit(4).all()
     top_blogs = Blog.query.filter_by(status="published").order_by(Blog.likes_count.desc(), Blog.created_at.desc()).limit(4).all()
 

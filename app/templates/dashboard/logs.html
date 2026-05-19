@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Monitoring Logs - AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left"><div class="topnav-v2__breadcrumb"><a class="topnav-v2__kicker" href="{{ url_for('admin.admin_dashboard') }}">Admin</a><span class="topnav-v2__sep">/</span><span class="topnav-v2__title">Logs</span></div></div>
+        </nav>
+        <div class="app-content" style="max-width:1180px;">
+            <section class="card-v2" style="margin-bottom:var(--sp-5);">
+                <form method="get" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-3);align-items:end;">
+                    <label><span class="label-v2">Event</span><input class="input-v2" name="event_type" value="{{ event_type }}" placeholder="login, password, api"></label>
+                    <label><span class="label-v2">Actor</span><input class="input-v2" name="actor" value="{{ actor }}" placeholder="username"></label>
+                    <label><span class="label-v2">IP</span><input class="input-v2" name="ip" value="{{ ip }}" placeholder="address"></label>
+                    <button class="btn-v2 btn-v2--primary">Filter Logs</button>
+                </form>
+            </section>
+
+            <section class="card-v2" style="margin-bottom:var(--sp-5);overflow:auto;">
+                <div class="section-header"><h2 class="section-header__title">Security & Audit Events</h2></div>
+                <table style="width:100%;border-collapse:collapse;font-size:var(--text-sm);">
+                    <thead><tr style="color:var(--text-muted);text-align:left;"><th>Time</th><th>Event</th><th>Actor</th><th>IP</th><th>Description</th></tr></thead>
+                    <tbody>
+                    {% for log in audit_logs %}
+                    <tr style="border-top:1px solid var(--border-subtle);"><td>{{ log.created_at.strftime('%b %d %H:%M') }}</td><td>{{ log.event_type }}</td><td>{{ log.actor_username }}</td><td>{{ log.ip_address }}</td><td>{{ log.description }}</td></tr>
+                    {% else %}
+                    <tr><td colspan="5" style="padding:var(--sp-4);color:var(--text-muted);">No logs found.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-5);">
+                <section class="card-v2" style="overflow:auto;">
+                    <div class="section-header"><h2 class="section-header__title">Login Events</h2></div>
+                    {% for event in login_events %}
+                    <div style="display:flex;justify-content:space-between;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--border-subtle);"><span>{{ event.email }}<br><small style="color:var(--text-muted);">{{ event.ip_address }} · {{ event.created_at.strftime('%b %d %H:%M') }}</small></span><span class="badge-v2 {{ 'badge-v2--success' if event.success else 'badge-v2--error' }}">{{ 'Success' if event.success else 'Failed' }}</span></div>
+                    {% else %}<p style="color:var(--text-muted);">No login events.</p>{% endfor %}
+                </section>
+                <section class="card-v2" style="overflow:auto;">
+                    <div class="section-header"><h2 class="section-header__title">Donation Intents</h2></div>
+                    {% for donation in donations %}
+                    <div style="display:flex;justify-content:space-between;gap:var(--sp-3);padding:var(--sp-3) 0;border-top:1px solid var(--border-subtle);"><span>INR {{ donation.amount }}<br><small style="color:var(--text-muted);">{{ donation.ip_address }} · {{ donation.created_at.strftime('%b %d %H:%M') }}</small></span><span class="badge-v2 badge-v2--secondary">{{ donation.status }}</span></div>
+                    {% else %}<p style="color:var(--text-muted);">No donations.</p>{% endfor %}
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

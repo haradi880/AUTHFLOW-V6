@@ -2,7 +2,7 @@
 
 from flask import Blueprint, render_template, flash, redirect, request, url_for
 from app.extensions import db
-from app.models import User, Blog, Project, Report
+from app.models import AuditLog, DonationIntent, Job, LoginEvent, Notification, User, Blog, Project, Report
 from app.utils.decorators import admin_required
 
 admin_bp = Blueprint('admin', __name__)
@@ -23,6 +23,10 @@ def admin_dashboard():
     total_blogs = Blog.query.count()
     total_projects = Project.query.count()
     open_reports = Report.query.filter_by(status="open").count()
+    active_jobs = Job.query.filter_by(status="active").count()
+    failed_logins = LoginEvent.query.filter_by(success=False).count()
+    queued_notifications = Notification.query.filter(Notification.email_status.in_(["pending", "queued", "failed"])).count()
+    donation_intents = DonationIntent.query.count()
     review_blogs = Blog.query.filter_by(status="draft").order_by(Blog.updated_at.desc()).limit(25).all()
     review_projects = Project.query.filter_by(status="draft").order_by(Project.updated_at.desc()).limit(25).all()
     reports = Report.query.order_by(Report.created_at.desc()).limit(25).all()
@@ -30,6 +34,9 @@ def admin_dashboard():
                          total_users=total_users, total_admins=total_admins,
                          total_blogs=total_blogs, total_projects=total_projects,
                          open_reports=open_reports, reports=reports,
+                         active_jobs=active_jobs, failed_logins=failed_logins,
+                         queued_notifications=queued_notifications,
+                         donation_intents=donation_intents,
                          review_blogs=review_blogs, review_projects=review_projects)
 
 
@@ -86,3 +93,30 @@ def update_project_status(project_id):
     db.session.commit()
     flash('Project status updated.', 'success')
     return redirect(url_for('admin.admin_dashboard'))
+
+
+@admin_bp.get('/logs')
+@admin_required
+def logs():
+    event_type = request.args.get('event_type', '').strip()
+    actor = request.args.get('actor', '').strip()
+    ip = request.args.get('ip', '').strip()
+    query = AuditLog.query
+    if event_type:
+        query = query.filter(AuditLog.event_type.ilike(f'%{event_type}%'))
+    if actor:
+        query = query.filter(AuditLog.actor_username.ilike(f'%{actor}%'))
+    if ip:
+        query = query.filter(AuditLog.ip_address.ilike(f'%{ip}%'))
+    audit_logs = query.order_by(AuditLog.created_at.desc()).limit(100).all()
+    login_events = LoginEvent.query.order_by(LoginEvent.created_at.desc()).limit(50).all()
+    donations = DonationIntent.query.order_by(DonationIntent.created_at.desc()).limit(25).all()
+    return render_template(
+        'dashboard/logs.html',
+        audit_logs=audit_logs,
+        login_events=login_events,
+        donations=donations,
+        event_type=event_type,
+        actor=actor,
+        ip=ip,
+    )

@@ -1,15 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Privacy - AuthFlow{% endblock %}
+{% block title %}Privacy Policy - AuthFlow{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
 {% block content %}
-<main class="main-content" style="margin-left: 0; max-width: 900px; margin-inline: auto;">
+<main class="main-content" style="margin-left:0;max-width:920px;margin-inline:auto;padding:var(--sp-6);">
     <section class="content-card">
         <h1 class="page-title">Privacy Policy</h1>
-        <p>AuthFlow uses essential cookies for login sessions, CSRF protection, and remember-me authentication. Optional analytics or marketing cookies should only run after consent.</p>
-        <p>We store profile information, uploads, messages, notifications, follows, likes, bookmarks, and content you publish so the app can provide its social and portfolio features.</p>
-        <p>Email may be used for OTP verification, password reset, message/comment/follow/like notifications, and weekly digest preferences you control in settings.</p>
-        <p>Uploads are served as public assets when attached to public profiles, blogs, or projects. Direct messages are private to the participants and administrators should treat them as sensitive operational data.</p>
-        <p>Account export and deletion are planned self-service controls. Until then, users should contact the site operator for deletion/export requests.</p>
+        <p>AuthFlow processes account, profile, content, hiring, collaboration, notification, messaging, and security data to operate a professional developer and hiring platform.</p>
+        <h2>Data We Collect</h2>
+        <p>We store account identifiers, email, password hashes, verification tokens, profile fields, resumes or portfolio links, uploaded media, published content, job posts, job applications, recruiter responses, saved jobs, teams, invitations, collaboration requests, messages, notifications, moderation reports, blocks, audit events, and basic device/request metadata.</p>
+        <h2>How We Use Data</h2>
+        <p>Data is used for authentication, fraud prevention, profile discovery, hiring workflows, collaboration workflows, messaging, notifications, email delivery, moderation, analytics, platform reliability, and legal compliance.</p>
+        <h2>Notification And Email Controls</h2>
+        <p>In-app notifications are retained as account history with seen and read states. Email may be sent for verification, password reset, messages, comments, follows, likes, job applications, recruiter updates, team invitations, collaboration requests, and service announcements.</p>
+        <h2>User Rights</h2>
+        <p>Users may request access, correction, deletion, export, restriction, or objection where applicable. Deletion requests may retain limited records needed for fraud prevention, security, dispute resolution, accounting, or legal obligations.</p>
+        <h2>Security</h2>
+        <p>AuthFlow uses password hashing, session cookies with secure attributes in production, CSRF protection, rate limiting, SQLAlchemy parameterized queries, upload validation, security headers, login lockout controls, and audit logging. Production deployments should use managed secrets, HTTPS, encrypted backups, Redis-backed rate limits, monitored email queues, and centralized logging.</p>
+        <h2>Cookies</h2>
+        <p>Essential cookies support login, CSRF, session continuity, and remember-me authentication. Optional cookies should only run after consent. See the <a href="{{ url_for('main.cookies') }}">Cookie Policy</a>.</p>
+        <h2>Contact</h2>
+        <p>For privacy, export, deletion, or security requests, contact the platform operator through support.</p>
         <a href="{{ url_for('main.home') }}" class="btn btn-primary">Back Home</a>
     </section>
 </main>

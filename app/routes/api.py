@@ -106,13 +106,13 @@ def api_my_xp():
 
 @api_bp.get('/profiles')
 def api_profiles():
-    users = User.query.filter_by(active=True).order_by(User.created_at.desc()).limit(25).all()
+    users = User.query.filter(User.active.is_(True)).order_by(User.created_at.desc()).limit(25).all()
     return jsonify([user_payload(user) for user in users])
 
 
 @api_bp.get('/profiles/<username>')
 def api_profile(username):
-    user = User.query.filter_by(username=username, active=True).first_or_404()
+    user = User.query.filter(User.username == username, User.active.is_(True)).first_or_404()
     payload = user_payload(user)
     payload["blogs"] = [
         blog_payload(blog)

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}My Applications - AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hiring.css') }}">
+{% endblock %}
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left"><div class="topnav-v2__breadcrumb"><a class="topnav-v2__kicker" href="{{ url_for('hiring.index') }}">Jobs</a><span class="topnav-v2__sep">/</span><span class="topnav-v2__title">My Applications</span></div></div>
+        </nav>
+        <div class="app-content" style="max-width:960px;">
+            <form method="get" class="hiring-filters" style="grid-template-columns:minmax(180px,240px) auto;">
+                <label><span class="sr-only">Status</span><select name="status"><option value="">All statuses</option>{% for status in statuses %}<option value="{{ status }}" {{ 'selected' if current_status == status }}>{{ status|replace('-',' ')|title }}</option>{% endfor %}</select></label>
+                <button class="btn-v2 btn-v2--primary">Filter</button>
+            </form>
+            <div class="job-results">
+                {% for application in applications.items %}
+                <article class="job-card">
+                    <a class="job-card__main" href="{{ url_for('hiring.job_detail', slug=application.job.slug) }}">
+                        <div class="job-card__logo">{{ application.job.company.name[0] if application.job.company else '?' }}</div>
+                        <div class="job-card__body">
+                            <div class="job-card__meta">{{ application.job.company.name if application.job.company else 'Unknown company' }}</div>
+                            <h2>{{ application.job.title }}</h2>
+                            <div class="job-card__badges"><span>{{ application.status|replace('-',' ')|title }}</span><span>Applied {{ application.created_at.strftime('%b %d, %Y') }}</span></div>
+                            {% if application.recruiter_response %}<p style="margin:var(--sp-3) 0 0;color:var(--text-secondary);">{{ application.recruiter_response }}</p>{% endif %}
+                        </div>
+                    </a>
+                    <div class="job-card__aside"><strong>{{ application.status|replace('-',' ')|title }}</strong><span>Updated {{ application.status_changed_at.strftime('%b %d') if application.status_changed_at else application.updated_at.strftime('%b %d') }}</span></div>
+                </article>
+                {% else %}
+                <div class="empty-v2"><div class="empty-v2__title">No applications yet</div><div class="empty-v2__desc">Apply to jobs and track recruiter responses here.</div><a href="{{ url_for('hiring.index') }}" class="btn-v2 btn-v2--primary btn-v2--sm" style="margin-top:var(--sp-4);">Browse Jobs</a></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

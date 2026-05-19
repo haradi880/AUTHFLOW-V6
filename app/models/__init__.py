@@ -583,11 +583,36 @@ class Notification(db.Model):
     message = db.Column(db.String(500), nullable=False)
     link = db.Column(db.String(500))
     is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    seen_at = db.Column(db.DateTime)
+    read_at = db.Column(db.DateTime)
+    delivered_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    email_sent_at = db.Column(db.DateTime)
+    email_status = db.Column(db.String(30), default="pending", nullable=False, index=True)
+    retry_count = db.Column(db.Integer, default=0, nullable=False)
+    last_error = db.Column(db.String(500))
+    priority = db.Column(db.String(20), default="normal", nullable=False, index=True)
+    entity_type = db.Column(db.String(60), index=True)
+    entity_id = db.Column(db.Integer, index=True)
     from_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     user = db.relationship("User", foreign_keys=[user_id], back_populates="received_notifications")
     from_user = db.relationship("User", foreign_keys=[from_user_id])
+
+    __table_args__ = (
+        db.Index("ix_notifications_user_read_created", "user_id", "is_read", "created_at"),
+        db.Index("ix_notifications_entity", "entity_type", "entity_id"),
+    )
+
+    def mark_seen(self):
+        if not self.seen_at:
+            self.seen_at = datetime.utcnow()
+
+    def mark_read(self):
+        self.is_read = True
+        self.mark_seen()
+        if not self.read_at:
+            self.read_at = datetime.utcnow()
 
 
 class OTPToken(db.Model):
@@ -610,6 +635,59 @@ class OTPToken(db.Model):
         return not self.consumed_at and self.expires_at > datetime.utcnow() and check_password_hash(self.code_hash, code)
 
 
+class LoginSession(db.Model):
+    __tablename__ = "login_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    ip_address = db.Column(db.String(45), index=True)
+    user_agent = db.Column(db.String(500))
+    device_label = db.Column(db.String(160))
+    browser = db.Column(db.String(80))
+    platform = db.Column(db.String(80))
+    fingerprint = db.Column(db.String(128), nullable=False, index=True)
+    is_current = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    revoked_at = db.Column(db.DateTime, index=True)
+    last_seen_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = db.relationship("User", backref=db.backref("login_sessions", lazy="dynamic", cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.Index("ix_login_sessions_user_revoked_seen", "user_id", "revoked_at", "last_seen_at"),
+        db.Index("ix_login_sessions_user_fingerprint", "user_id", "fingerprint"),
+    )
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None
+
+
+class LoginEvent(db.Model):
+    __tablename__ = "login_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    email = db.Column(db.String(255), index=True)
+    event_type = db.Column(db.String(40), nullable=False, index=True)
+    success = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    reason = db.Column(db.String(160))
+    ip_address = db.Column(db.String(45), index=True)
+    user_agent = db.Column(db.String(500))
+    fingerprint = db.Column(db.String(128), index=True)
+    suspicious = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = db.relationship("User", backref=db.backref("login_events", lazy="dynamic"))
+
+    __table_args__ = (
+        db.Index("ix_login_events_user_created", "user_id", "created_at"),
+        db.Index("ix_login_events_email_created", "email", "created_at"),
+        db.Index("ix_login_events_success_created", "success", "created_at"),
+    )
+
+
 class Message(db.Model):
     __tablename__ = "messages"
 
@@ -622,6 +700,125 @@ class Message(db.Model):
 
     sender = db.relationship("User", foreign_keys=[sender_id], backref=db.backref("sent_messages", lazy="dynamic"))
     recipient = db.relationship("User", foreign_keys=[recipient_id], backref=db.backref("received_messages", lazy="dynamic"))
+
+
+# =====================================================
+#  COLLABORATION SYSTEM
+# =====================================================
+
+class Team(TimestampMixin, db.Model):
+    __tablename__ = "teams"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(160), nullable=False)
+    slug = db.Column(db.String(180), unique=True, nullable=False, index=True)
+    description = db.Column(db.String(500))
+    visibility = db.Column(db.String(20), default="private", nullable=False, index=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    owner = db.relationship("User", foreign_keys=[owner_id], backref=db.backref("owned_teams", lazy="dynamic"))
+    members = db.relationship("TeamMember", back_populates="team", lazy="dynamic", cascade="all, delete-orphan")
+    invitations = db.relationship("TeamInvitation", back_populates="team", lazy="dynamic", cascade="all, delete-orphan")
+    activities = db.relationship("ActivityUpdate", back_populates="team", lazy="dynamic", cascade="all, delete-orphan")
+
+    def member_for(self, user):
+        if not user or not getattr(user, "is_authenticated", False):
+            return None
+        return TeamMember.query.filter_by(team_id=self.id, user_id=user.id).first()
+
+    def can_manage(self, user):
+        member = self.member_for(user)
+        return bool(user and (getattr(user, "is_admin", False) or self.owner_id == user.id or (member and member.role in {"owner", "admin"})))
+
+
+class TeamMember(db.Model):
+    __tablename__ = "team_members"
+
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = db.Column(db.String(30), default="member", nullable=False, index=True)
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    team = db.relationship("Team", back_populates="members")
+    user = db.relationship("User", backref=db.backref("team_memberships", lazy="dynamic", cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("team_id", "user_id", name="uq_team_member"),
+        db.Index("ix_team_members_user_role", "user_id", "role"),
+    )
+
+
+class TeamInvitation(TimestampMixin, db.Model):
+    __tablename__ = "team_invitations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    inviter_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    invitee_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = db.Column(db.String(30), default="member", nullable=False)
+    status = db.Column(db.String(30), default="pending", nullable=False, index=True)
+    message = db.Column(db.String(500))
+    responded_at = db.Column(db.DateTime)
+
+    team = db.relationship("Team", back_populates="invitations")
+    inviter = db.relationship("User", foreign_keys=[inviter_id])
+    invitee = db.relationship("User", foreign_keys=[invitee_id], backref=db.backref("team_invitations", lazy="dynamic", cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("team_id", "invitee_id", "status", name="uq_team_invitation_status"),
+        db.Index("ix_team_invitations_invitee_status", "invitee_id", "status"),
+    )
+
+
+class CollaborationRequest(TimestampMixin, db.Model):
+    __tablename__ = "collaboration_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    recipient_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="SET NULL"), index=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("jobs.id", ondelete="SET NULL"), index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id", ondelete="SET NULL"), index=True)
+    subject = db.Column(db.String(160), nullable=False)
+    message = db.Column(db.String(1000))
+    requested_role = db.Column(db.String(60), default="collaborator", nullable=False)
+    status = db.Column(db.String(30), default="pending", nullable=False, index=True)
+    responded_at = db.Column(db.DateTime)
+
+    requester = db.relationship("User", foreign_keys=[requester_id], backref=db.backref("sent_collaboration_requests", lazy="dynamic", cascade="all, delete-orphan"))
+    recipient = db.relationship("User", foreign_keys=[recipient_id], backref=db.backref("received_collaboration_requests", lazy="dynamic", cascade="all, delete-orphan"))
+    project = db.relationship("Project", backref=db.backref("collaboration_requests", lazy="dynamic"))
+    job = db.relationship("Job", backref=db.backref("collaboration_requests", lazy="dynamic"))
+    team = db.relationship("Team", backref=db.backref("collaboration_requests", lazy="dynamic"))
+
+    __table_args__ = (
+        db.Index("ix_collab_requests_recipient_status", "recipient_id", "status"),
+        db.Index("ix_collab_requests_requester_status", "requester_id", "status"),
+    )
+
+
+class ActivityUpdate(TimestampMixin, db.Model):
+    __tablename__ = "activity_updates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="SET NULL"), index=True)
+    job_id = db.Column(db.Integer, db.ForeignKey("jobs.id", ondelete="SET NULL"), index=True)
+    action = db.Column(db.String(80), nullable=False, index=True)
+    summary = db.Column(db.String(500), nullable=False)
+
+    actor = db.relationship("User", foreign_keys=[actor_id])
+    team = db.relationship("Team", back_populates="activities")
+    project = db.relationship("Project", backref=db.backref("activity_updates", lazy="dynamic"))
+    job = db.relationship("Job", backref=db.backref("activity_updates", lazy="dynamic"))
+
+    __table_args__ = (
+        db.Index("ix_activity_updates_team_created", "team_id", "created_at"),
+        db.Index("ix_activity_updates_project_created", "project_id", "created_at"),
+        db.Index("ix_activity_updates_job_created", "job_id", "created_at"),
+    )
 
 
 class Block(db.Model):
@@ -773,6 +970,20 @@ class Job(TimestampMixin, db.Model):
     def get_skills_list(self):
         return [s.strip() for s in (self.skills_required or "").split(",") if s.strip()]
 
+    def user_can_manage(self, user):
+        company_owner_id = self.company.created_by_id if self.company else None
+        return bool(
+            user
+            and getattr(user, "is_authenticated", False)
+            and (user.id == self.posted_by_id or user.id == company_owner_id or getattr(user, "is_admin", False))
+        )
+
+    __table_args__ = (
+        db.Index("ix_jobs_status_created", "status", "created_at"),
+        db.Index("ix_jobs_status_category_type_mode", "status", "category", "job_type", "work_mode"),
+        db.Index("ix_jobs_company_status", "company_id", "status"),
+    )
+
 
 class JobApplication(TimestampMixin, db.Model):
     __tablename__ = "job_applications"
@@ -783,11 +994,23 @@ class JobApplication(TimestampMixin, db.Model):
     cover_note = db.Column(db.Text)
     resume_url = db.Column(db.String(500))
     status = db.Column(db.String(30), default="applied", nullable=False, index=True)  # applied, reviewed, shortlisted, rejected, hired
+    recruiter_response = db.Column(db.String(1000))
+    status_changed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
 
     job = db.relationship("Job", back_populates="applications")
-    user = db.relationship("User", backref=db.backref("job_applications", lazy="dynamic", cascade="all, delete-orphan"))
+    user = db.relationship(
+        "User",
+        foreign_keys=[user_id],
+        backref=db.backref("job_applications", lazy="dynamic", cascade="all, delete-orphan"),
+    )
+    reviewed_by = db.relationship("User", foreign_keys=[reviewed_by_id])
 
-    __table_args__ = (db.UniqueConstraint("job_id", "user_id", name="uq_job_application"),)
+    __table_args__ = (
+        db.UniqueConstraint("job_id", "user_id", name="uq_job_application"),
+        db.Index("ix_job_applications_job_status_created", "job_id", "status", "created_at"),
+        db.Index("ix_job_applications_user_status_created", "user_id", "status", "created_at"),
+    )
 
 
 class JobSave(db.Model):
@@ -802,6 +1025,29 @@ class JobSave(db.Model):
     job = db.relationship("Job", back_populates="saves")
 
     __table_args__ = (db.UniqueConstraint("user_id", "job_id", name="uq_job_save"),)
+
+
+class DonationIntent(db.Model):
+    __tablename__ = "donation_intents"
+
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    currency = db.Column(db.String(3), default="INR", nullable=False)
+    upi_url = db.Column(db.String(500), nullable=False)
+    status = db.Column(db.String(30), default="qr_generated", nullable=False, index=True)
+    ip_address = db.Column(db.String(45), index=True)
+    user_agent = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    completed_at = db.Column(db.DateTime)
+
+    user = db.relationship("User", backref=db.backref("donation_intents", lazy="dynamic"))
+
+    __table_args__ = (
+        db.Index("ix_donation_intents_user_created", "user_id", "created_at"),
+        db.Index("ix_donation_intents_status_created", "status", "created_at"),
+    )
 
 
 # =====================================================

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Donation Recorded - AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/support.css') }}">{% endblock %}
+{% block content %}
+<main class="support-main">
+    <section class="support-shell">
+        <div class="support-panel" style="max-width:680px;margin:0 auto;text-align:center;">
+            <span class="support-kicker">Thank you</span>
+            <h1 style="font-size:clamp(2rem,5vw,3rem);margin:var(--sp-3) 0;">Donation intent recorded.</h1>
+            {% if donation %}
+            <p style="color:var(--text-secondary);line-height:1.7;">We marked your INR {{ donation.amount }} support action as paid. UPI settlement is verified separately in the payment app/bank statement.</p>
+            {% else %}
+            <p style="color:var(--text-secondary);line-height:1.7;">Thanks for supporting the platform.</p>
+            {% endif %}
+            <div style="display:flex;gap:var(--sp-3);justify-content:center;flex-wrap:wrap;margin-top:var(--sp-5);">
+                <a class="btn-v2 btn-v2--primary" href="{{ url_for('main.support') }}">Donate Again</a>
+                <a class="btn-v2 btn-v2--secondary" href="{{ url_for('main.home') }}">Back Home</a>
+            </div>
+        </div>
+    </section>
+</main>
+{% endblock %}

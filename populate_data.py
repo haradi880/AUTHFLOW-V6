@@ -47,10 +47,14 @@ def populate(app):
         db.create_all()
 
         for name, slug in CATEGORIES:
-            get_or_create(Category, name=name, slug=slug)
+            category, created = get_or_create(Category, slug=slug, defaults={"name": name})
+            if not created and category.name != name:
+                category.name = name
 
         for tag_name in TAGS:
-            get_or_create(Tag, name=tag_name, slug=tag_name)
+            tag, created = get_or_create(Tag, slug=tag_name, defaults={"name": tag_name})
+            if not created and tag.name != tag_name:
+                tag.name = tag_name
 
         admin, admin_created = get_or_create(
             User,

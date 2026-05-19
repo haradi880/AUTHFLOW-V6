@@ -17,7 +17,15 @@ from app.models import (
     XPTransaction,
     Company,
     Job,
+    JobApplication,
+    LoginEvent,
+    LoginSession,
+    Notification,
     DevLogComment,
+    Team,
+    TeamInvitation,
+    TeamMember,
+    DonationIntent,
 )
 from app.services.gamification import award_xp, level_from_xp, xp_progress
 
@@ -447,6 +455,143 @@ def test_hiring_job_post_profile_fields_and_delete():
 
     with app.app_context():
         assert Job.query.get(job_id) is None
+
+
+def test_job_application_notifications_and_status_tracking():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+        recruiter = User(username="recruiter", email="recruiter@example.com", is_verified=True)
+        recruiter.set_password("password123")
+        company = Company(name="Acme Robotics", slug="acme-robotics", created_by=recruiter)
+        db.session.add_all([recruiter, company])
+        db.session.flush()
+        job = Job(
+            title="Robotics Engineer",
+            slug="robotics-engineer",
+            description="Build production robots and developer tools.",
+            job_type="full-time",
+            work_mode="remote",
+            category="robotics",
+            company_id=company.id,
+            posted_by_id=recruiter.id,
+        )
+        db.session.add(job)
+        db.session.commit()
+        job_id = job.id
+
+    with app.test_client() as client:
+        client.post("/login", data={"email": "demo@example.com", "password": "password123"})
+        response = client.post(f"/hiring/apply/{job_id}", data={"cover_note": "I build robots."}, follow_redirects=False)
+        assert response.status_code == 302
+
+    with app.app_context():
+        application = JobApplication.query.filter_by(job_id=job_id).first()
+        applicant = User.query.filter_by(username="demo").first()
+        recruiter = User.query.filter_by(username="recruiter").first()
+        assert application.status == "applied"
+        assert Notification.query.filter_by(user_id=applicant.id, action="job_application_submitted").count() == 1
+        assert Notification.query.filter_by(user_id=recruiter.id, action="job_application_received").count() == 1
+
+    with app.test_client() as client:
+        client.post("/login", data={"email": "recruiter@example.com", "password": "password123"})
+        response = client.post(
+            f"/hiring/applications/{application.id}/status",
+            data={"status": "shortlisted", "recruiter_response": "Strong portfolio."},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+
+    with app.app_context():
+        application = db.session.get(JobApplication, application.id)
+        applicant = User.query.filter_by(username="demo").first()
+        assert application.status == "shortlisted"
+        assert application.recruiter_response == "Strong portfolio."
+        assert Notification.query.filter_by(user_id=applicant.id, action="job_application_status").count() == 1
+
+
+def test_team_invitation_acceptance_creates_membership_and_notification():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+        invitee = User(username="builder", email="builder@example.com", is_verified=True)
+        invitee.set_password("password123")
+        db.session.add(invitee)
+        db.session.commit()
+
+    with app.test_client() as client:
+        client.post("/login", data={"email": "demo@example.com", "password": "password123"})
+        response = client.post("/collaboration/teams/new", data={"name": "Robot Lab", "description": "Shared builds"}, follow_redirects=False)
+        assert response.status_code == 302
+        with app.app_context():
+            team = Team.query.filter_by(slug="robot-lab").first()
+            assert team is not None
+            assert TeamMember.query.filter_by(team_id=team.id, role="owner").count() == 1
+        response = client.post(f"/collaboration/teams/{team.id}/invite", data={"user": "builder", "role": "member"}, follow_redirects=False)
+        assert response.status_code == 302
+
+    with app.app_context():
+        invitee = User.query.filter_by(username="builder").first()
+        invitation = TeamInvitation.query.filter_by(invitee_id=invitee.id, status="pending").first()
+        assert invitation is not None
+        assert Notification.query.filter_by(user_id=invitee.id, action="team_invitation").count() == 1
+
+    with app.test_client() as client:
+        client.post("/login", data={"email": "builder@example.com", "password": "password123"})
+        response = client.post(f"/collaboration/invitations/{invitation.id}/accept", follow_redirects=False)
+        assert response.status_code == 302
+
+    with app.app_context():
+        invitation = db.session.get(TeamInvitation, invitation.id)
+        invitee = User.query.filter_by(username="builder").first()
+        assert invitation.status == "accepted"
+        assert TeamMember.query.filter_by(team_id=invitation.team_id, user_id=invitee.id).count() == 1
+
+
+def test_login_creates_device_history_and_settings_renders():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+
+    with app.test_client() as client:
+        response = client.post(
+            "/login",
+            data={"email": "demo@example.com", "password": "password123"},
+            headers={"User-Agent": "Mozilla/5.0 Chrome Windows"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        settings_response = client.get("/settings")
+        assert settings_response.status_code == 200
+        assert b"Login Devices" in settings_response.data
+
+    with app.app_context():
+        user = User.query.filter_by(username="demo").first()
+        assert LoginSession.query.filter_by(user_id=user.id).count() == 1
+        assert LoginEvent.query.filter_by(user_id=user.id, success=True).count() == 1
+
+
+def test_support_upi_qr_generation_logs_donation_intent():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+
+    with app.test_client() as client:
+        response = client.post("/api/generate-qr", json={"amount": 99})
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert "upi://pay?pa=llaka2937-1@okicici&pn=ADITYA&am=99.00&cu=INR" == data["upi_link"]
+        assert data["qr_code"]
+
+    with app.app_context():
+        intent = DonationIntent.query.first()
+        assert intent is not None
+        assert str(intent.amount) == "99.00"
 
 
 def test_devlog_comment_and_devlog_delete():

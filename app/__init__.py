@@ -14,13 +14,13 @@ from sqlalchemy import inspect
 
 from config import config_by_name
 from app.extensions import db, login_manager, migrate
+from app.realtime import init_realtime
 
 # Initialize security extensions
 csrf = CSRFProtect()
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://",  # Use Redis in production: "redis://localhost:6379"
 )
 
 
@@ -40,6 +40,7 @@ def create_app(config_name=None):
     ensure_runtime_schema(app)
     configure_logging(app)
     configure_audit_logging(app)
+    init_realtime(app)
 
     return app
 
@@ -70,6 +71,7 @@ def init_extensions(app):
 def register_blueprints(app):
     from app.routes.admin import admin_bp
     from app.routes.api import api_bp
+    from app.routes.api_v1 import api_v1_bp
     from app.routes.auth import auth_bp
     from app.routes.blog import blog_bp
     from app.routes.devlogs import devlog_bp
@@ -81,6 +83,7 @@ def register_blueprints(app):
     from app.routes.robotics import robotics_bp
     from app.routes.reputation import reputation_bp
     from app.routes.analyzer import analyzer_bp
+    from app.routes.collaboration import collaboration_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -93,8 +96,10 @@ def register_blueprints(app):
     app.register_blueprint(robotics_bp)
     app.register_blueprint(reputation_bp)
     app.register_blueprint(analyzer_bp)
+    app.register_blueprint(collaboration_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(api_v1_bp, url_prefix="/api/v1")
 
 
 def register_security(app):
@@ -104,6 +109,13 @@ def register_security(app):
     def sync_login_session():
         """Sync user session data for consistency."""
         if current_user.is_authenticated:
+            from app.services.security import touch_current_session
+
+            login_session = touch_current_session(current_user)
+            if session.get("login_session_id") and login_session is None:
+                session.clear()
+                return redirect(url_for("auth.login", next=request.url))
+
             # Regenerate session after login to prevent fixation attacks
             if not session.get("_login_session_established"):
                 session.permanent = True
@@ -113,6 +125,7 @@ def register_security(app):
                 session["user"] = current_user.username
             if session.get("is_admin") != current_user.is_admin:
                 session["is_admin"] = current_user.is_admin
+            db.session.commit()
         return None
 
     @app.after_request
@@ -310,6 +323,34 @@ def ensure_runtime_schema(app):
             for name, column_type in additions.items():
                 if name not in existing:
                     connection.exec_driver_sql(f"ALTER TABLE users ADD COLUMN {name} {column_type}")
+
+        table_additions = {
+            "notifications": {
+                "seen_at": "DATETIME",
+                "read_at": "DATETIME",
+                "delivered_at": "DATETIME",
+                "email_sent_at": "DATETIME",
+                "email_status": "VARCHAR(30) NOT NULL DEFAULT 'pending'",
+                "retry_count": "INTEGER NOT NULL DEFAULT 0",
+                "last_error": "VARCHAR(500)",
+                "priority": "VARCHAR(20) NOT NULL DEFAULT 'normal'",
+                "entity_type": "VARCHAR(60)",
+                "entity_id": "INTEGER",
+            },
+            "job_applications": {
+                "recruiter_response": "VARCHAR(1000)",
+                "status_changed_at": "DATETIME",
+                "reviewed_by_id": "INTEGER",
+            },
+        }
+        with db.engine.begin() as connection:
+            for table_name, columns in table_additions.items():
+                if not inspector.has_table(table_name):
+                    continue
+                existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+                for name, column_type in columns.items():
+                    if name not in existing_columns:
+                        connection.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {name} {column_type}")
 
 
 def configure_logging(app):

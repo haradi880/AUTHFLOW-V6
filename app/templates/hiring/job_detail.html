@@ -1,6 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ job.title }} — Hiring — AuthFlow{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block title %}{{ job.title }} - Jobs - AuthFlow{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hiring.css') }}">
+{% endblock %}
 
 {% block content %}
 <div class="app-shell">
@@ -9,15 +12,11 @@
         <nav class="topnav-v2">
             <div class="topnav-v2__left">
                 <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-                <div class="topnav-v2__breadcrumb">
-                    <span class="topnav-v2__kicker"><a href="{{ url_for('hiring.index') }}" style="color:inherit;text-decoration:none;">Hiring</a></span>
-                    <span class="topnav-v2__sep">/</span>
-                    <span class="topnav-v2__title">{{ job.title[:40] }}</span>
-                </div>
+                <div class="topnav-v2__breadcrumb"><a class="topnav-v2__kicker" href="{{ url_for('hiring.index') }}">Jobs</a><span class="topnav-v2__sep">/</span><span class="topnav-v2__title">{{ job.title[:42] }}</span></div>
             </div>
             <div class="topnav-v2__right">
-                <a href="{{ url_for('hiring.index') }}" class="btn-v2 btn-v2--secondary btn-v2--sm">← All Jobs</a>
-                {% if current_user.is_authenticated and (current_user.id == job.posted_by_id or (job.company and current_user.id == job.company.created_by_id) or current_user.is_admin) %}
+                {% if current_user.is_authenticated and job.user_can_manage(current_user) %}
+                <a href="{{ url_for('hiring.job_applications', job_id=job.id) }}" class="btn-v2 btn-v2--secondary btn-v2--sm">Applications</a>
                 <form method="POST" action="{{ url_for('hiring.delete_job', job_id=job.id) }}" onsubmit="return confirm('Delete this job post?');" style="margin:0;">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn-v2 btn-v2--secondary btn-v2--sm">Delete</button>
@@ -26,67 +25,65 @@
             </div>
         </nav>
 
-        <div class="app-content" style="max-width:800px;">
-            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
-                <!-- Header -->
-                <div style="display:flex;align-items:flex-start;gap:var(--sp-5);margin-bottom:var(--sp-6);">
-                    <div class="avatar-v2 avatar-v2--xl" style="background:var(--surface-4);border-radius:var(--r-xl);color:var(--text-muted);font-size:var(--text-2xl);">{{ job.company.name[0] if job.company else '?' }}</div>
-                    <div style="flex:1;">
-                        <h1 style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;margin-bottom:var(--sp-2);">{{ job.title }}</h1>
-                        <div style="font-size:var(--text-base);color:var(--text-secondary);margin-bottom:var(--sp-3);">{{ job.company.name if job.company else 'Unknown' }} · {{ job.location or 'Remote' }}</div>
-                        <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
-                            <span class="badge-v2 badge-v2--primary">{{ job.job_type|replace('-',' ')|title }}</span>
-                            <span class="badge-v2 badge-v2--info">{{ job.work_mode|title }}</span>
-                            <span class="badge-v2 badge-v2--accent">{{ job.category|replace('-',' ')|title }}</span>
-                            {% if job.experience_level %}<span class="badge-v2 badge-v2--warning">{{ job.experience_level|title }}</span>{% endif %}
+        <div class="app-content" style="max-width:1040px;">
+            <div class="job-detail-layout">
+                <article class="card-v2">
+                    <div style="display:flex;gap:var(--sp-4);align-items:flex-start;margin-bottom:var(--sp-6);">
+                        <div class="job-card__logo" aria-hidden="true">{{ job.company.name[0] if job.company else '?' }}</div>
+                        <div>
+                            <div class="job-card__meta">{{ job.company.name if job.company else 'Unknown company' }}{% if job.location %} · {{ job.location }}{% endif %}</div>
+                            <h1 style="font-size:var(--text-3xl);line-height:1.08;margin:var(--sp-1) 0 var(--sp-3);">{{ job.title }}</h1>
+                            <div class="job-card__badges">
+                                <span>{{ job.job_type|replace('-',' ')|title }}</span>
+                                <span>{{ job.work_mode|title }}</span>
+                                <span>{{ job.category|replace('-',' ')|title }}</span>
+                                {% if job.experience_level %}<span>{{ job.experience_level|title }}</span>{% endif %}
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Salary & Info -->
-                <div class="grid-3" style="margin-bottom:var(--sp-6);">
-                    {% if job.salary_min and job.salary_max %}
-                    <div class="stat-v2"><div class="stat-v2__label">Salary Range</div><div class="stat-v2__value" style="font-size:var(--text-lg);">${{ job.salary_min//1000 }}k–${{ job.salary_max//1000 }}k</div><div class="stat-v2__hint">{{ job.salary_currency }}/year</div></div>
+                    {% if job.get_skills_list() %}
+                    <section style="margin-bottom:var(--sp-6);">
+                        <h2 style="font-size:var(--text-sm);text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:var(--sp-3);">Skills</h2>
+                        <div class="job-card__skills">{% for skill in job.get_skills_list() %}<span>{{ skill }}</span>{% endfor %}</div>
+                    </section>
                     {% endif %}
-                    <div class="stat-v2"><div class="stat-v2__label">Applicants</div><div class="stat-v2__value" style="font-size:var(--text-lg);">{{ job.applications_count }}</div></div>
-                    <div class="stat-v2"><div class="stat-v2__label">Views</div><div class="stat-v2__value" style="font-size:var(--text-lg);">{{ job.views_count }}</div></div>
-                </div>
 
-                <!-- Skills -->
-                {% if job.get_skills_list() %}
-                <div style="margin-bottom:var(--sp-6);">
-                    <h3 style="font-size:var(--text-sm);font-weight:600;color:var(--text-muted);margin-bottom:var(--sp-3);text-transform:uppercase;letter-spacing:.05em;">Required Skills</h3>
-                    <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
-                        {% for s in job.get_skills_list() %}<span class="tag-v2">{{ s }}</span>{% endfor %}
-                    </div>
-                </div>
-                {% endif %}
+                    <section>
+                        <h2 style="font-size:var(--text-lg);margin-bottom:var(--sp-3);">Role Overview</h2>
+                        <div style="white-space:pre-wrap;line-height:1.75;color:var(--text-secondary);">{{ job.description }}</div>
+                    </section>
+                </article>
 
-                <hr class="divider-v2">
+                <aside class="card-v2 job-apply-panel">
+                    {% if job.salary_min and job.salary_max %}
+                    <div><span>Compensation</span><strong>{{ job.salary_currency }} {{ job.salary_min//1000 }}k-{{ job.salary_max//1000 }}k</strong></div>
+                    {% endif %}
+                    <div><span>Applicants</span><strong>{{ job.applications_count }}</strong></div>
+                    <div><span>Views</span><strong>{{ job.views_count }}</strong></div>
 
-                <!-- Description -->
-                <div style="font-size:var(--text-base);color:var(--text-secondary);line-height:1.75;white-space:pre-wrap;">{{ job.description }}</div>
-
-                <hr class="divider-v2">
-
-                <!-- Actions -->
-                <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap;">
                     {% if current_user.is_authenticated %}
                         {% if has_applied %}
-                        <span class="btn-v2 btn-v2--secondary" style="cursor:default;">✓ Applied</span>
+                        <div class="application-status">
+                            <span>Status</span>
+                            <strong>{{ application.status|replace('-',' ')|title }}</strong>
+                            {% if application.recruiter_response %}<p>{{ application.recruiter_response }}</p>{% endif %}
+                        </div>
+                        <a href="{{ url_for('hiring.my_applications') }}" class="btn-v2 btn-v2--primary">Track Application</a>
                         {% else %}
                         <form method="post" action="{{ url_for('hiring.apply_job', job_id=job.id) }}">
-                            <button type="submit" class="btn-v2 btn-v2--primary btn-v2--lg">Apply Now</button>
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <label class="form-group-v2"><span class="label-v2">Cover note</span><textarea class="input-v2" name="cover_note" rows="5" maxlength="2000" placeholder="Share why you are a strong fit."></textarea></label>
+                            <button type="submit" class="btn-v2 btn-v2--primary btn-v2--lg" style="width:100%;">Apply Now</button>
                         </form>
                         {% endif %}
-                        <button class="btn-v2 btn-v2--secondary" onclick="fetch('{{ url_for('hiring.save_job', job_id=job.id) }}',{method:'POST'}).then(r=>r.json()).then(d=>{this.textContent=d.saved?'★ Saved':'☆ Save';})">{{ '★ Saved' if is_saved else '☆ Save' }}</button>
+                        <button class="btn-v2 btn-v2--secondary" style="width:100%;" onclick="fetch('{{ url_for('hiring.save_job', job_id=job.id) }}',{method:'POST'}).then(r=>r.json()).then(d=>{this.textContent=d.saved?'Saved':'Save Job';})">{{ 'Saved' if is_saved else 'Save Job' }}</button>
                     {% else %}
-                    <a href="{{ url_for('auth.login') }}" class="btn-v2 btn-v2--primary btn-v2--lg">Sign in to Apply</a>
+                    <a href="{{ url_for('auth.login', next=request.path) }}" class="btn-v2 btn-v2--primary btn-v2--lg">Sign in to Apply</a>
                     {% endif %}
-                </div>
+                </aside>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-{% block extra_js %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

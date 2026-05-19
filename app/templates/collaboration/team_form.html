@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}New Team - AuthFlow{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left"><div class="topnav-v2__breadcrumb"><span class="topnav-v2__title">New Team</span></div></div>
+        </nav>
+        <div class="app-content" style="max-width:720px;">
+            <form class="card-v2" method="post">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <label class="form-group-v2"><span class="label-v2">Team name</span><input class="input-v2" name="name" required maxlength="160"></label>
+                <label class="form-group-v2"><span class="label-v2">Description</span><textarea class="input-v2" name="description" rows="4" maxlength="500"></textarea></label>
+                <label class="form-group-v2"><span class="label-v2">Visibility</span><select class="input-v2" name="visibility"><option value="private">Private</option><option value="workspace">Workspace</option></select></label>
+                <button class="btn-v2 btn-v2--primary">Create Team</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

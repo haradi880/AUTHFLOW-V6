@@ -119,9 +119,12 @@ def audit_log(
         # Get request context
         context = get_request_context()
         
+        from app.models import AuditLog
+
         # Create log entry
+        event_value = event_type.value if hasattr(event_type, "value") else str(event_type)
         log_entry = AuditLog(
-            event_type=str(event_type),
+            event_type=event_value,
             actor_id=actor_id,
             actor_username=actor_username or "system",
             target_id=target_id,
@@ -141,7 +144,7 @@ def audit_log(
         
         # Also log to application logger
         level = "error" if error_message else "info"
-        log_message = f"[AUDIT] {event_type}: {description or ''}"
+        log_message = f"[AUDIT] {event_value}: {description or ''}"
         if actor_username:
             log_message += f" by {actor_username}"
         if error_message:

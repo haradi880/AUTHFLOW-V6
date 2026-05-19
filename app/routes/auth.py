@@ -16,6 +16,8 @@ from app.services.auth import (
     verify_otp,
 )
 from app.services.gamification import award_xp
+from app.services.security import create_login_session, log_login_attempt, revoke_session
+from app.utils.audit import AuditEventType, audit_log
 from app.utils.rate_limit import rate_limit
 
 auth_bp = Blueprint("auth", __name__)
@@ -124,8 +126,16 @@ def login():
         return redirect(url_for("main.home"))
 
     if request.method == "POST":
-        user, error = authenticate_user(request.form.get("email"), request.form.get("password", ""))
+        email = normalize_email(request.form.get("email"))
+        password = request.form.get("password", "")
+        if not email or not password:
+            flash("Enter your email and password to continue.", "error")
+            return render_template("auth/login.html")
+
+        user, error = authenticate_user(email, password)
         if error:
+            log_login_attempt(email, user=user, success=False, reason=error)
+            db.session.commit()
             if user and not user.is_verified:
                 session["verify_email"] = user.email
                 flash(error, "warning")
@@ -138,6 +148,9 @@ def login():
         session.permanent = remember
         session["user"] = user.username
         session["is_admin"] = user.is_admin
+        create_login_session(user)
+        log_login_attempt(email, user=user, success=True)
+        db.session.commit()
         award_xp(user, "daily_login")
         flash(f"Welcome back, {user.username}!", "success")
         next_page = request.args.get("next")
@@ -149,9 +162,12 @@ def login():
 @auth_bp.route("/logout")
 @login_required
 def logout():
+    public_id = session.get("login_session_id")
+    if public_id:
+        revoke_session(current_user, public_id)
+    audit_log(AuditEventType.LOGOUT, description="User logged out")
     logout_user()
-    session.pop("user", None)
-    session.pop("is_admin", None)
+    session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
 
@@ -199,6 +215,7 @@ def new_password():
             return render_template("auth/new_password.html")
         user = User.query.filter_by(email=session.get("reset_email")).first_or_404()
         reset_password(user, password)
+        audit_log(AuditEventType.PASSWORD_RESET, description="Password reset completed", actor_id=user.id, actor_username=user.username)
         session.pop("reset_email", None)
         session.pop("otp_verified", None)
         flash("Password reset successfully. Please log in.", "success")
