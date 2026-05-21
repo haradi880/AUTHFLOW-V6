@@ -102,6 +102,24 @@ def test_remember_login_sets_persistent_cookie():
         assert any("remember_token=" in cookie for cookie in set_cookie_headers)
 
 
+def test_logout_clears_remember_cookie():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+
+    with app.test_client() as client:
+        client.post(
+            "/login",
+            data={"email": "demo@example.com", "password": "password123", "remember": "on"},
+            follow_redirects=False,
+        )
+        response = client.get("/logout", follow_redirects=False)
+        assert response.status_code == 302
+        set_cookie_headers = response.headers.getlist("Set-Cookie")
+        assert any("remember_token=;" in cookie and ("Expires=Thu, 01 Jan 1970" in cookie or "Max-Age=0" in cookie) for cookie in set_cookie_headers)
+
+
 def test_bookmarks_page_renders_for_logged_in_user():
     app = create_app("testing")
     with app.app_context():

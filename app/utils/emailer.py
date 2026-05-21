@@ -253,7 +253,8 @@ def send_email(to_email, subject, body, html_body=None):
 
 def send_otp_email(email, otp):
     """Send OTP verification code to user's email."""
-    subject = "Your Verification Code - AuthFlow"
+    app_name = current_app.config.get("APP_NAME", "AUTHFLOW")
+    subject = f"Your Verification Code - {app_name}"
     body = f"""
 Hello!
 
@@ -264,18 +265,20 @@ This code will expire in 10 minutes.
 If you didn't request this code, please ignore this email.
 
 Best regards,
-AuthFlow Team
+{app_name} Team
 """
     return send_email(email, subject, body)
 
 
 def send_welcome_email(email, username):
     """Send welcome email to new users."""
-    subject = "Welcome to AuthFlow!"
+    app_name = current_app.config.get("APP_NAME", "AUTHFLOW")
+    site_url = current_app.config.get("PUBLIC_BASE_URL", "https://haradibots.onrender.com")
+    subject = f"Welcome to {app_name}!"
     body = f"""
 Hello {username}!
 
-Welcome to AuthFlow - the developer blogging platform.
+Welcome to {app_name} - the developer blogging platform.
 
 You can now:
 - Write and publish blog posts
@@ -283,9 +286,9 @@ You can now:
 - Follow other developers
 - Build your portfolio
 
-Get started by writing your first blog post!
+Get started: {site_url}
 
 Best regards,
-AuthFlow Team
+{app_name} Team
 """
     return send_email(email, subject, body)

@@ -11,7 +11,7 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 
-ALLOWED_UPLOAD_FOLDERS = {'avatars', 'banners', 'blogs', 'projects', 'devlogs'}
+ALLOWED_UPLOAD_FOLDERS = {'avatars', 'banners', 'blogs', 'projects', 'devlogs', 'messages'}
 
 
 def save_upload(file, folder, max_size=(1200, 1200)):
@@ -85,6 +85,64 @@ def allowed_media_file(filename):
 def media_type_for(filename):
     ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
     return "video" if ext in current_app.config.get('ALLOWED_VIDEO_EXTENSIONS', set()) else "image"
+
+
+def allowed_message_attachment(filename):
+    if '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in current_app.config.get('MESSAGE_ATTACHMENT_EXTENSIONS', set())
+
+
+def _stream_size(file):
+    content_length = getattr(file, "content_length", None)
+    if content_length:
+        return content_length
+    stream = getattr(file, "stream", None)
+    if not stream or not hasattr(stream, "tell") or not hasattr(stream, "seek"):
+        return None
+    try:
+        current = stream.tell()
+        stream.seek(0, 2)
+        size = stream.tell()
+        stream.seek(current)
+        return size
+    except Exception:
+        return None
+
+
+def save_message_attachment(file):
+    if not file or not file.filename:
+        return None, "No file selected."
+    if not allowed_message_attachment(file.filename):
+        return None, "Unsupported attachment type. Use images, PDF, TXT, or ZIP."
+
+    max_bytes = int(current_app.config.get("MESSAGE_ATTACHMENT_MAX_BYTES", 5 * 1024 * 1024))
+    size = _stream_size(file)
+    if size is not None and size > max_bytes:
+        return None, f"Attachment is too large. Maximum size is {max_bytes // (1024 * 1024)} MB."
+
+    filename = generate_filename(file.filename)
+    upload_root = Path(current_app.config['UPLOAD_FOLDER']).resolve()
+    upload_folder = (upload_root / 'messages').resolve()
+    if upload_root not in upload_folder.parents and upload_folder != upload_root:
+        return None, "Invalid upload path."
+    upload_folder.mkdir(parents=True, exist_ok=True)
+    filepath = upload_folder / filename
+
+    try:
+        file.save(filepath)
+        return {
+            "filename": filename,
+            "original_name": secure_filename(file.filename)[:255],
+            "size": filepath.stat().st_size,
+            "mime": (getattr(file, "mimetype", "") or "application/octet-stream")[:120],
+        }, None
+    except Exception as e:
+        current_app.logger.warning("Error saving message attachment: %s", e)
+        if filepath.exists():
+            filepath.unlink(missing_ok=True)
+        return None, "The attachment could not be saved."
 
 
 def save_media_upload(file, folder='devlogs', max_size=(1400, 1400)):

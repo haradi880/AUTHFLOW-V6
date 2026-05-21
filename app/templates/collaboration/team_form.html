@@ -1,21 +1,44 @@
 {% extends "base.html" %}
-{% block title %}New Team - AuthFlow{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block title %}New Workspace - {{ config.APP_NAME }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/collaboration.css') }}">
+{% endblock %}
 {% block content %}
 <div class="app-shell">
     {% include 'components/sidebar.html' %}
     <div class="app-main">
         <nav class="topnav-v2">
-            <div class="topnav-v2__left"><div class="topnav-v2__breadcrumb"><span class="topnav-v2__title">New Team</span></div></div>
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb"><a class="topnav-v2__kicker" href="{{ url_for('collaboration.hub') }}">Collaboration</a><span class="topnav-v2__sep">/</span><span class="topnav-v2__title">New Workspace</span></div>
+            </div>
         </nav>
-        <div class="app-content" style="max-width:720px;">
-            <form class="card-v2" method="post">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <label class="form-group-v2"><span class="label-v2">Team name</span><input class="input-v2" name="name" required maxlength="160"></label>
-                <label class="form-group-v2"><span class="label-v2">Description</span><textarea class="input-v2" name="description" rows="4" maxlength="500"></textarea></label>
-                <label class="form-group-v2"><span class="label-v2">Visibility</span><select class="input-v2" name="visibility"><option value="private">Private</option><option value="workspace">Workspace</option></select></label>
-                <button class="btn-v2 btn-v2--primary">Create Team</button>
-            </form>
+
+        <div class="app-content collab-page">
+            <section class="collab-grid">
+                <form class="collab-card collab-form" method="post">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <div class="collab-card__header">
+                        <h1 class="collab-card__title">Create Workspace</h1>
+                        <span class="badge-v2 badge-v2--primary">Private by default</span>
+                    </div>
+                    <label class="form-group-v2"><span class="label-v2">Workspace name</span><input class="input-v2" name="name" required maxlength="160" placeholder="Robot Lab, Hiring Pipeline, Build Team"></label>
+                    <label class="form-group-v2"><span class="label-v2">Description</span><textarea class="input-v2" name="description" rows="4" maxlength="500" placeholder="What is this team or community space for?"></textarea></label>
+                    <label class="form-group-v2"><span class="label-v2">Privacy</span><select class="input-v2" name="visibility"><option value="private">Private - invite only</option><option value="workspace">Workspace - visible to members</option></select></label>
+                    <button class="btn-v2 btn-v2--primary">Create Workspace</button>
+                </form>
+
+                <aside class="collab-card">
+                    <div class="collab-card__header"><h2 class="collab-card__title">What you get</h2></div>
+                    <ul class="collab-help-list">
+                        <li>Invite members by username or email with owner, admin, member, and viewer roles.</li>
+                        <li>Keep project planning private while you build a community or team around it.</li>
+                        <li>Track invitations, joins, and collaboration activity in one workspace timeline.</li>
+                        <li>Use direct messages for conversation while workspaces hold structure and permissions.</li>
+                    </ul>
+                </aside>
+            </section>
         </div>
     </div>
 </div>

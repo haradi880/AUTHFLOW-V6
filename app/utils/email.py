@@ -1,6 +1,7 @@
 import html
 import re
 import threading
+from urllib.parse import urljoin, urlparse
 
 from flask import current_app, render_template
 
@@ -19,9 +20,24 @@ def send_async_email(app, subject, recipient, text_body, html_body):
         deliver_email(recipient, subject, text_body, html_body=html_body)
 
 
+def _absolute_public_url(value=""):
+    base_url = current_app.config.get("PUBLIC_BASE_URL", "").rstrip("/") + "/"
+    if not value:
+        return base_url
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.netloc:
+        return value
+    return urljoin(base_url, str(value).lstrip("/"))
+
+
 def send_email(subject, recipient, template, **kwargs):
     """Send a rendered HTML email through the shared delivery chain."""
     app = current_app._get_current_object()
+    kwargs.setdefault("app_name", app.config.get("APP_NAME", "AUTHFLOW"))
+    kwargs.setdefault("site_url", _absolute_public_url())
+    kwargs.setdefault("settings_url", _absolute_public_url("/settings"))
+    if kwargs.get("link"):
+        kwargs["link"] = _absolute_public_url(kwargs["link"])
 
     try:
         html_body = render_template(f"email/{template}.html", **kwargs)

@@ -35,7 +35,7 @@ def clear_notifications():
 @login_required
 def get_notifications_count():
     """Returns unread notification count for global polling."""
-    count = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+    count = db.session.query(db.func.count(Notification.id)).filter_by(user_id=current_user.id, is_read=False).scalar()
     return {'count': count}
 
 @social_bp.route('/api/pulse')
@@ -44,8 +44,8 @@ def get_activity_pulse():
     """Returns lightweight unread counts for live badges."""
     latest = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).limit(5).all()
     return {
-        'notifications': Notification.query.filter_by(user_id=current_user.id, is_read=False).count(),
-        'messages': Message.query.filter_by(recipient_id=current_user.id, is_read=False).count(),
+        'notifications': db.session.query(db.func.count(Notification.id)).filter_by(user_id=current_user.id, is_read=False).scalar(),
+        'messages': db.session.query(db.func.count(Message.id)).filter_by(recipient_id=current_user.id, is_read=False).scalar(),
         'latest_notifications': [serialize_notification(notification) for notification in latest],
     }
 
@@ -67,7 +67,7 @@ def list_notifications():
         "page": pagination.page,
         "pages": pagination.pages,
         "total": pagination.total,
-        "unread": Notification.query.filter_by(user_id=current_user.id, is_read=False).count(),
+        "unread": db.session.query(db.func.count(Notification.id)).filter_by(user_id=current_user.id, is_read=False).scalar(),
     }
 
 @social_bp.route('/api/notifications/read', methods=['POST'])

@@ -5,6 +5,7 @@ from flask_login import current_user, login_required
 from app.extensions import db
 from app.models import User, Message, Block
 from app.services.notifications import create_notification
+from app.utils.uploads import save_message_attachment
 from app.utils.rate_limit import rate_limit
 from datetime import datetime
 from sqlalchemy import or_, and_
@@ -19,6 +20,10 @@ def message_payload(message):
         'sender_id': message.sender_id,
         'is_read': message.is_read,
         'created_at': message.created_at.isoformat() + 'Z',
+        'attachment_url': url_for('uploaded_file', folder='messages', filename=message.attachment_filename) if message.attachment_filename else None,
+        'attachment_name': message.attachment_original_name,
+        'attachment_mime': message.attachment_mime,
+        'attachment_size': message.attachment_size,
     }
 
 @messages_bp.route('/messages')
@@ -113,8 +118,9 @@ def send_message():
     """Send a message (AJAX or form)."""
     recipient_id = request.form.get('recipient_id', type=int)
     content = request.form.get('content', '').strip()
+    attachment = request.files.get('attachment')
     
-    if not recipient_id or not content:
+    if not recipient_id or (not content and not (attachment and attachment.filename)):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'error': 'Invalid data'}), 400
         flash("Invalid message data.", "error")
@@ -130,11 +136,25 @@ def send_message():
     if recipient.message_permission == 'followers' and not recipient.is_following(current_user):
         return jsonify({'error': 'Only followers can message this user'}), 403
     
+    attachment_data = None
+    if attachment and attachment.filename:
+        attachment_data, error = save_message_attachment(attachment)
+        if error:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'error': error}), 400
+            flash(error, "error")
+            return redirect(request.referrer or url_for('messages.chat', username=recipient.username))
+
     message = Message(
         sender_id=current_user.id,
         recipient_id=recipient.id,
-        content=content
+        content=content or (attachment_data["original_name"] if attachment_data else "")
     )
+    if attachment_data:
+        message.attachment_filename = attachment_data["filename"]
+        message.attachment_original_name = attachment_data["original_name"]
+        message.attachment_mime = attachment_data["mime"]
+        message.attachment_size = attachment_data["size"]
     
     db.session.add(message)
     db.session.commit()

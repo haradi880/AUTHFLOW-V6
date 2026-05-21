@@ -1,8 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Chat with @{{ other_user.username }} — AuthFlow{% endblock %}
+{% block title %}Chat with @{{ other_user.username }} - {{ config.APP_NAME }}{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/messages.css') }}">
 {% endblock %}
+
+{% macro user_avatar(user, size_class='avatar-v2--sm', extra_class='') %}
+<div class="avatar-v2 {{ size_class }} {{ extra_class }}">
+    {% if user.avatar and user.avatar != 'default.jpg' %}
+    <img src="{{ user.avatar_url }}" alt="{{ user.username }}">
+    {% else %}
+    {{ user.username[0]|upper }}
+    {% endif %}
+</div>
+{% endmacro %}
 
 {% block content %}
 <div class="app-shell">
@@ -10,7 +21,9 @@
     <div class="app-main">
         <nav class="topnav-v2">
             <div class="topnav-v2__left">
-                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
                 <div class="topnav-v2__breadcrumb">
                     <a href="{{ url_for('messages.inbox') }}" class="topnav-v2__kicker" style="text-decoration:none;color:inherit;">Messages</a>
                     <span class="topnav-v2__sep">/</span>
@@ -19,57 +32,103 @@
             </div>
         </nav>
 
-        <div class="app-content" style="max-width:800px;display:flex;flex-direction:column;height:calc(100vh - var(--topnav-h));padding:var(--sp-4);">
-            <div class="card-v2" style="flex:1;display:flex;flex-direction:column;padding:0;overflow:hidden;">
-                <!-- Header -->
-                <div style="padding:var(--sp-4);background:var(--surface-3);border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:var(--sp-3);">
-                    <div class="avatar-v2 avatar-v2--sm">
-                        {% if other_user.avatar and other_user.avatar != 'default.jpg' %}
-                        <img src="{{ other_user.avatar_url }}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">
-                        {% else %}
-                        {{ other_user.username[0]|upper }}
-                        {% endif %}
-                    </div>
-                    <div>
-                        <div style="font-weight:600;color:var(--text-primary);font-size:var(--text-sm);">{{ other_user.full_name or other_user.username }}</div>
-                        <div style="font-size:var(--text-xs);color:var(--success);">Online</div>
-                    </div>
-                </div>
-
-                <!-- Messages -->
-                <div id="chatMessages" style="flex:1;overflow-y:auto;padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);background:var(--surface-2);">
-                    {% for msg in messages %}
-                    <div class="message" data-id="{{ msg.id }}" style="max-width:75%;display:flex;flex-direction:column;gap:4px;{{ 'align-self:flex-end;' if msg.sender_id == current_user.id else 'align-self:flex-start;' }}">
-                        <div style="padding:var(--sp-3) var(--sp-4);border-radius:var(--r-lg);font-size:var(--text-sm);line-height:1.5;{{ 'background:var(--gradient-primary);color:#fff;border-bottom-right-radius:4px;' if msg.sender_id == current_user.id else 'background:var(--surface-3);color:var(--text-primary);border-bottom-left-radius:4px;border:1px solid var(--border-subtle);' }}">
-                            {{ msg.content }}
+        <div class="app-content chat-shell">
+            <section class="chat-panel">
+                <header class="chat-header">
+                    <div class="chat-header__identity">
+                        {{ user_avatar(other_user, 'avatar-v2--md', 'chat-header__avatar') }}
+                        <div>
+                            <div class="chat-header__name">{{ other_user.full_name or other_user.username }}</div>
+                            <div class="chat-header__handle">@{{ other_user.username }}</div>
                         </div>
-                        <div style="display:flex;justify-content:flex-end;align-items:center;gap:var(--sp-1);font-size:var(--text-2xs);color:var(--text-faint);">
+                    </div>
+                    <div class="chat-header__actions">
+                        <a class="btn-v2 btn-v2--secondary btn-v2--sm" href="{{ url_for('main.public_profile', username=other_user.username) }}">Profile</a>
+                    </div>
+                </header>
+
+                <div id="chatMessages" class="chat-messages" aria-live="polite">
+                    {% for msg in messages %}
+                    {% set is_sent = msg.sender_id == current_user.id %}
+                    <div class="message {{ 'message--sent' if is_sent else 'message--received' }}" data-id="{{ msg.id }}">
+                        <div class="message__bubble">{{ msg.content }}</div>
+                        {% if msg.has_attachment %}
+                        <a class="message__attachment {{ 'message__attachment--image' if msg.attachment_is_image else '' }}" href="{{ url_for('uploaded_file', folder='messages', filename=msg.attachment_filename) }}" target="_blank" rel="noopener">
+                            {% if msg.attachment_is_image %}
+                            <img src="{{ url_for('uploaded_file', folder='messages', filename=msg.attachment_filename) }}" alt="{{ msg.attachment_original_name or 'Attachment' }}">
+                            {% endif %}
+                            <span>{{ msg.attachment_original_name or 'Attachment' }}</span>
+                        </a>
+                        {% endif %}
+                        <div class="message__meta">
                             <time class="js-local-time" datetime="{{ msg.created_at.isoformat() }}Z" data-format="time">{{ msg.created_at.strftime('%H:%M') }}</time>
-                            {% if msg.sender_id == current_user.id %}
-                            <span class="message-status">
+                            {% if is_sent %}
+                            <span class="message-status" aria-label="{{ 'Read' if msg.is_read else 'Sent' }}">
                                 {% if msg.is_read %}
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15" style="margin-left:-6px;"/></svg>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15"/></svg>
                                 {% else %}
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                                 {% endif %}
                             </span>
                             {% endif %}
                         </div>
                     </div>
+                    {% else %}
+                    <div class="chat-empty" id="chatEmpty">
+                        {{ user_avatar(other_user, 'avatar-v2--xl', 'chat-profile__avatar') }}
+                        <div class="chat-empty__title">Start the conversation</div>
+                        <div>Send a quick note to @{{ other_user.username }}.</div>
+                    </div>
                     {% endfor %}
                 </div>
 
-                <!-- Input -->
-                <div style="padding:var(--sp-3) var(--sp-4);background:var(--surface-3);border-top:1px solid var(--border-subtle);">
-                    <form id="chatForm" style="display:flex;gap:var(--sp-3);">
+                <div class="chat-composer">
+                    <form id="chatForm" class="chat-composer__form" enctype="multipart/form-data">
                         <input type="hidden" name="recipient_id" value="{{ other_user.id }}">
-                        <input type="text" class="input-v2" name="content" placeholder="Type a message..." autocomplete="off" required style="flex:1;border-radius:var(--r-full);padding-left:var(--sp-4);">
-                        <button type="submit" class="btn-v2 btn-v2--primary btn-v2--icon" style="border-radius:50%;width:44px;height:44px;">
+                        <label class="chat-composer__attach" title="Attach file">
+                            <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.zip,image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,application/zip">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </label>
+                        <textarea class="input-v2 chat-composer__input" name="content" placeholder="Write a message..." autocomplete="off" rows="1" maxlength="1000"></textarea>
+                        <button type="submit" class="btn-v2 btn-v2--primary btn-v2--icon chat-composer__send" aria-label="Send message">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </button>
                     </form>
                 </div>
-            </div>
+            </section>
+
+            <aside class="chat-profile">
+                <div class="chat-profile__head">
+                    {{ user_avatar(other_user, 'avatar-v2--lg', 'chat-profile__avatar') }}
+                    <div>
+                        <div class="chat-profile__name">{{ other_user.full_name or other_user.username }}</div>
+                        <div class="chat-profile__handle">@{{ other_user.username }}</div>
+                    </div>
+                </div>
+
+                <div class="chat-profile__section">
+                    <div class="chat-profile__label">About</div>
+                    <div class="chat-profile__text">{{ other_user.headline or other_user.bio or 'No profile summary yet.' }}</div>
+                </div>
+
+                {% if other_user.location %}
+                <div class="chat-profile__section">
+                    <div class="chat-profile__label">Location</div>
+                    <div class="chat-profile__text">{{ other_user.location }}</div>
+                </div>
+                {% endif %}
+
+                {% if other_user.skills %}
+                <div class="chat-profile__section">
+                    <div class="chat-profile__label">Skills</div>
+                    <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
+                        {% for skill in other_user.get_skills_list()[:8] %}
+                        <span class="tag-v2">{{ skill }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </aside>
         </div>
     </div>
 </div>
@@ -79,27 +138,40 @@
 <script>
     const chatMessages = document.getElementById('chatMessages');
     const chatForm = document.getElementById('chatForm');
+    const chatInput = chatForm.querySelector('[name="content"]');
+    const attachmentInput = chatForm.querySelector('[name="attachment"]');
     let lastMessageId = {% if messages %}{{ messages[-1].id }}{% else %}0{% endif %};
-    
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-    chatForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const input = chatForm.querySelector('input[name="content"]');
-        const content = input.value.trim();
-        if (!content) return;
-        
+
+    scrollToLatest();
+    resizeComposer();
+
+    chatInput.addEventListener('input', resizeComposer);
+    chatInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            chatForm.requestSubmit();
+        }
+    });
+
+    chatForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const content = chatInput.value.trim();
+        if (!content && !attachmentInput.files.length) return;
+
         const tempId = 'temp-' + Date.now();
         const formData = new FormData(chatForm);
-        input.value = '';
-        
+        chatInput.value = '';
+        attachmentInput.value = '';
+        resizeComposer();
+
         appendMessage({
             id: tempId,
             content: content,
             created_at: new Date().toISOString(),
-            status: 'sending'
+            status: 'sending',
+            attachment_name: formData.get('attachment')?.name || ''
         }, true);
-        
+
         try {
             const response = await fetch("{{ url_for('messages.send_message') }}", {
                 method: 'POST',
@@ -109,22 +181,30 @@
                     'X-CSRFToken': '{{ csrf_token() }}'
                 }
             });
-            
-            if (response.ok) {
-                const data = await response.json();
-                const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
-                if (tempMsg) {
-                    tempMsg.querySelector('.message-status').innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
-                    tempMsg.setAttribute('data-id', data.message.id);
-                    lastMessageId = Math.max(lastMessageId, data.message.id);
-                }
+
+            if (!response.ok) {
+                throw new Error('Message could not be sent');
+            }
+
+            const data = await response.json();
+            const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+            if (tempMsg) {
+                tempMsg.querySelector('.message-status').innerHTML = sentIcon();
+                tempMsg.setAttribute('data-id', data.message.id);
+                lastMessageId = Math.max(lastMessageId, data.message.id);
             }
         } catch (error) {
             const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
-            if (tempMsg) tempMsg.style.opacity = '0.5';
+            if (tempMsg) tempMsg.classList.add('message--failed');
+            window.toast?.show(error.message || 'Message could not be sent', 'error');
         }
     });
-    
+
+    function resizeComposer() {
+        chatInput.style.height = 'auto';
+        chatInput.style.height = `${Math.min(chatInput.scrollHeight, 128)}px`;
+    }
+
     function escapeHtml(value) {
         const div = document.createElement('div');
         div.textContent = value || '';
@@ -132,54 +212,54 @@
     }
 
     function appendMessage(msg, isSent) {
-        const div = document.createElement('div');
-        div.className = 'message animate-fade-up';
-        div.setAttribute('data-id', msg.id);
-        div.style.cssText = `max-width:75%;display:flex;flex-direction:column;gap:4px;${isSent ? 'align-self:flex-end;' : 'align-self:flex-start;'}`;
-        
-        const styleContent = isSent 
-            ? 'background:var(--gradient-primary);color:#fff;border-bottom-right-radius:4px;'
-            : 'background:var(--surface-3);color:var(--text-primary);border-bottom-left-radius:4px;border:1px solid var(--border-subtle);';
+        document.getElementById('chatEmpty')?.remove();
 
-        let statusHtml = '';
-        if (isSent) {
-            statusHtml = `<span class="message-status">${msg.status === 'sending' ? '...' : (msg.is_read ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15" style="margin-left:-6px;"/></svg>' : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>')}</span>`;
-        }
+        const div = document.createElement('div');
+        div.className = `message animate-fade-up ${isSent ? 'message--sent' : 'message--received'}`;
+        div.setAttribute('data-id', msg.id);
+
+        const statusHtml = isSent
+            ? `<span class="message-status" aria-label="${msg.status === 'sending' ? 'Sending' : 'Sent'}">${msg.status === 'sending' ? '...' : (msg.is_read ? readIcon() : sentIcon())}</span>`
+            : '';
 
         div.innerHTML = `
-            <div style="padding:var(--sp-3) var(--sp-4);border-radius:var(--r-lg);font-size:var(--text-sm);line-height:1.5;${styleContent}">${escapeHtml(msg.content)}</div>
-            <div style="display:flex;justify-content:flex-end;align-items:center;gap:var(--sp-1);font-size:var(--text-2xs);color:var(--text-faint);">
+            <div class="message__bubble">${escapeHtml(msg.content)}</div>
+            ${attachmentHtml(msg)}
+            <div class="message__meta">
                 <time class="js-local-time" datetime="${escapeHtml(msg.created_at)}" data-format="time">${formatMessageTime(msg.created_at)}</time>
                 ${statusHtml}
             </div>
         `;
         chatMessages.appendChild(div);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        scrollToLatest();
     }
 
     async function checkNewMessages() {
         try {
-            const cacheBuster = Date.now();
-            const response = await fetch(`{{ url_for('messages.chat', username=other_user.username) }}?last_id=${lastMessageId}&ajax=1&_=${cacheBuster}`, {
+            const response = await fetch(`{{ url_for('messages.chat', username=other_user.username) }}?last_id=${lastMessageId}&ajax=1&_=${Date.now()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.messages && data.messages.length > 0) {
-                    let shouldPlaySound = false;
-                    data.messages.forEach(msg => {
-                        if (!document.querySelector(`[data-id="${msg.id}"]`)) {
-                            if (msg.sender_id != {{ current_user.id }}) {
-                                appendMessage({id: msg.id, content: msg.content, created_at: msg.created_at}, false);
-                                shouldPlaySound = true;
-                            }
-                        }
-                        lastMessageId = Math.max(lastMessageId, msg.id);
-                    });
-                    if (shouldPlaySound && typeof playNotificationSound === 'function') playNotificationSound();
+            if (!response.ok) return;
+
+            const data = await response.json();
+            if (!data.messages || data.messages.length === 0) return;
+
+            let shouldPlaySound = false;
+            data.messages.forEach((msg) => {
+                if (!document.querySelector(`[data-id="${msg.id}"]`)) {
+                    if (msg.sender_id != {{ current_user.id }}) {
+                        appendMessage(msg, false);
+                        shouldPlaySound = true;
+                    }
                 }
-            }
-        } catch (e) {}
+                lastMessageId = Math.max(lastMessageId, msg.id);
+            });
+            if (shouldPlaySound && typeof playNotificationSound === 'function') playNotificationSound();
+        } catch (error) {}
+    }
+
+    function scrollToLatest() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     function formatMessageTime(value) {
@@ -189,8 +269,26 @@
         return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
+    function sentIcon() {
+        return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+    }
+
+    function readIcon() {
+        return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15"/></svg>';
+    }
+
+    function attachmentHtml(msg) {
+        const url = msg.attachment_url;
+        const name = msg.attachment_name || '';
+        if (!url && !name) return '';
+        const isImage = (msg.attachment_mime || '').startsWith('image/');
+        const image = isImage && url ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(name || 'Attachment')}">` : '';
+        const href = url || '#';
+        return `<a class="message__attachment ${isImage ? 'message__attachment--image' : ''}" href="${escapeHtml(href)}" target="_blank" rel="noopener">${image}<span>${escapeHtml(name || 'Attachment')}</span></a>`;
+    }
+
     setInterval(() => {
         if (document.visibilityState === 'visible') checkNewMessages();
-    }, 1500);
+    }, 2000);
 </script>
 {% endblock %}

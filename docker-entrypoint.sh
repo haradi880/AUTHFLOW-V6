@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
-flask db upgrade
+if [ "${SKIP_DB_MIGRATIONS:-false}" != "true" ]; then
+  flask deploy-db
+fi
 
 exec "$@"

@@ -40,6 +40,8 @@ def _env_float(name: str, default: float) -> float:
 
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me")
+    APP_NAME = os.getenv("APP_NAME") or "AUTHFLOW"
+    PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://haradibots.onrender.com").rstrip("/")
     HOST = os.getenv("HOST") or "0.0.0.0"
     PORT = _env_int("PORT", 5000)
     SQLALCHEMY_DATABASE_URI = _database_uri()
@@ -53,6 +55,8 @@ class Config:
     MAX_IMAGE_PIXELS = _env_int("MAX_IMAGE_PIXELS", 24_000_000)
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
     ALLOWED_VIDEO_EXTENSIONS = {"mp4", "webm", "mov"}
+    MESSAGE_ATTACHMENT_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "zip"}
+    MESSAGE_ATTACHMENT_MAX_BYTES = _env_int("MESSAGE_ATTACHMENT_MAX_BYTES", 5 * 1024 * 1024)
 
     PERMANENT_SESSION_LIFETIME = timedelta(days=_env_int("SESSION_DAYS", 30))
     REMEMBER_COOKIE_DURATION = timedelta(days=_env_int("REMEMBER_DAYS", 30))
@@ -73,7 +77,7 @@ class Config:
     MAIL_USERNAME = os.getenv("MAIL_USERNAME")
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER") or MAIL_USERNAME or "noreply@example.com"
-    MAIL_SENDER_NAME = os.getenv("MAIL_SENDER_NAME") or "AuthFlow"
+    MAIL_SENDER_NAME = os.getenv("MAIL_SENDER_NAME") or APP_NAME
     MAIL_SUPPRESS_SEND = _env_bool("MAIL_SUPPRESS_SEND", False)
 
     MAIL_BACKUP_SERVER = os.getenv("MAIL_BACKUP_SERVER")

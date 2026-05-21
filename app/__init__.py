@@ -1,10 +1,11 @@
 import logging
 import os
 import secrets
+import time
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, abort, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from flask_login import current_user
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
@@ -35,6 +36,7 @@ def create_app(config_name=None):
     register_template_helpers(app)
     register_error_handlers(app)
     register_upload_route(app)
+    register_well_known_routes(app)
     register_cli(app)
     ensure_upload_folders(app)
     ensure_runtime_schema(app)
@@ -108,13 +110,24 @@ def register_security(app):
     @app.before_request
     def sync_login_session():
         """Sync user session data for consistency."""
+        if request.endpoint in {"static", "uploaded_file"}:
+            return None
+
         if current_user.is_authenticated:
             from app.services.security import touch_current_session
 
-            login_session = touch_current_session(current_user)
-            if session.get("login_session_id") and login_session is None:
-                session.clear()
-                return redirect(url_for("auth.login", next=request.url))
+            now = int(time.time())
+            touch_interval = 300
+            last_touched = int(session.get("login_session_touched_at") or 0)
+            should_touch_session = bool(session.get("login_session_id")) and now - last_touched >= touch_interval
+
+            if should_touch_session:
+                login_session = touch_current_session(current_user)
+                if login_session is None:
+                    session.clear()
+                    return redirect(url_for("auth.login", next=request.url))
+                session["login_session_touched_at"] = now
+                db.session.commit()
 
             # Regenerate session after login to prevent fixation attacks
             if not session.get("_login_session_established"):
@@ -125,7 +138,6 @@ def register_security(app):
                 session["user"] = current_user.username
             if session.get("is_admin") != current_user.is_admin:
                 session["is_admin"] = current_user.is_admin
-            db.session.commit()
         return None
 
     @app.after_request
@@ -140,10 +152,22 @@ def register_security(app):
         if not app.debug:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         
-        # Content Security Policy (permissive for now - tighten in production)
+        script_src = "'self' 'unsafe-inline'"
+        if app.debug:
+            script_src = f"{script_src} 'unsafe-eval'"
+
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+            (
+                "default-src 'self'; "
+                f"script-src {script_src}; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
+                "connect-src 'self' ws: wss:; "
+                "base-uri 'self'; "
+                "frame-ancestors 'self';"
+            )
         )
         
         # Cache control based on endpoint
@@ -184,9 +208,17 @@ def register_template_helpers(app):
         
         counts = {'notifications': 0, 'messages': 0, 'bookmarks': 0}
         if current_user.is_authenticated:
-            counts['notifications'] = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
-            counts['messages'] = Message.query.filter_by(recipient_id=current_user.id, is_read=False).count()
-            counts['bookmarks'] = Bookmark.query.filter_by(user_id=current_user.id).count()
+            now = int(time.time())
+            cached_counts = session.get("unread_counts_cache")
+            cache_age = now - int(session.get("unread_counts_cached_at") or 0)
+            if isinstance(cached_counts, dict) and cache_age < 15:
+                counts.update({key: int(cached_counts.get(key) or 0) for key in counts})
+            else:
+                counts['notifications'] = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+                counts['messages'] = Message.query.filter_by(recipient_id=current_user.id, is_read=False).count()
+                counts['bookmarks'] = Bookmark.query.filter_by(user_id=current_user.id).count()
+                session["unread_counts_cache"] = counts
+                session["unread_counts_cached_at"] = now
             
         # Flask-WTF provides CSRF token automatically
         return {
@@ -202,18 +234,22 @@ def register_template_helpers(app):
 def register_upload_route(app):
     @app.get("/uploads/<folder>/<path:filename>", endpoint="uploaded_file")
     def uploaded_file(folder, filename):
-        allowed_folders = {"avatars", "banners", "blogs", "projects", "devlogs"}
+        allowed_folders = {"avatars", "banners", "blogs", "projects", "devlogs", "messages"}
         if folder not in allowed_folders:
             abort(404)
         return send_from_directory(Path(app.config["UPLOAD_FOLDER"]) / folder, filename)
 
 
+def register_well_known_routes(app):
+    @app.get("/.well-known/appspecific/com.chrome.devtools.json")
+    def chrome_devtools_probe():
+        return jsonify({}), 200
+
+
 def register_cli(app):
-    @app.cli.command("init-db")
-    def init_db_command():
+    def seed_initial_data():
         from app.models import Category, User
 
-        db.create_all()
         if not Category.query.first():
             for name, slug in (
                 ("AI & Machine Learning", "ai-ml"),
@@ -223,12 +259,41 @@ def register_cli(app):
                 ("Data Science", "data-science"),
             ):
                 db.session.add(Category(name=name, slug=slug))
-        if not User.query.filter_by(email="admin@example.com").first():
-            admin = User(username="admin", email="admin@example.com", is_admin=True, is_verified=True)
+        if not User.query.filter_by(email="haradibots.ml@gmail.com").first():
+            admin = User(username="admin", email="haradibots.ml@gmail.com", is_admin=True, is_verified=True)
             admin.set_password(os.getenv("ADMIN_PASSWORD", "change-me-admin"))
             db.session.add(admin)
+        else:
+            admin = User.query.filter_by(email="haradibots.ml@gmail.com").first()
+            if admin and (not admin.is_admin or not admin.is_verified):
+                admin.is_admin = True
+                admin.is_verified = True
         db.session.commit()
+
+    @app.cli.command("init-db")
+    def init_db_command():
+        db.create_all()
+        seed_initial_data()
         print("Database initialized.")
+
+    @app.cli.command("deploy-db")
+    def deploy_db_command():
+        """Prepare the database safely for container deployments."""
+        from flask_migrate import stamp as migrate_stamp, upgrade as migrate_upgrade
+
+        inspector = inspect(db.engine)
+        user_tables = set(inspector.get_table_names()) - {"alembic_version"}
+
+        if not user_tables:
+            db.create_all()
+            seed_initial_data()
+            migrate_stamp(revision="head")
+            print("Empty database bootstrapped and stamped at migration head.")
+            return
+
+        migrate_upgrade()
+        seed_initial_data()
+        print("Database migrations applied.")
 
 
 def register_error_handlers(app):
@@ -270,7 +335,7 @@ def _template_exists(app, template_name):
 
 
 def ensure_upload_folders(app):
-    for folder in ("avatars", "banners", "blogs", "projects", "devlogs"):
+    for folder in ("avatars", "banners", "blogs", "projects", "devlogs", "messages"):
         Path(app.config["UPLOAD_FOLDER"], folder).mkdir(parents=True, exist_ok=True)
 
 
@@ -341,6 +406,12 @@ def ensure_runtime_schema(app):
                 "recruiter_response": "VARCHAR(1000)",
                 "status_changed_at": "DATETIME",
                 "reviewed_by_id": "INTEGER",
+            },
+            "messages": {
+                "attachment_filename": "VARCHAR(255)",
+                "attachment_original_name": "VARCHAR(255)",
+                "attachment_mime": "VARCHAR(120)",
+                "attachment_size": "INTEGER",
             },
         }
         with db.engine.begin() as connection:

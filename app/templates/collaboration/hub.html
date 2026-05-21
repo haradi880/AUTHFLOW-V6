@@ -1,6 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Collaboration - AuthFlow{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block title %}Collaboration - {{ config.APP_NAME }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/collaboration.css') }}">
+{% endblock %}
 {% block content %}
 <div class="app-shell">
     {% include 'components/sidebar.html' %}
@@ -10,48 +13,122 @@
                 <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                 <div class="topnav-v2__breadcrumb"><span class="topnav-v2__title">Collaboration</span></div>
             </div>
-            <div class="topnav-v2__right"><a href="{{ url_for('collaboration.create_team') }}" class="btn-v2 btn-v2--primary btn-v2--sm">New Team</a></div>
+            <div class="topnav-v2__right"><a href="{{ url_for('collaboration.create_team') }}" class="btn-v2 btn-v2--primary btn-v2--sm">New Workspace</a></div>
         </nav>
-        <div class="app-content" style="display:grid;gap:var(--sp-6);">
-            <section>
-                <div class="section-header"><h2 class="section-header__title">Your Teams</h2></div>
-                <div class="grid-3">
-                    {% for team in teams %}
-                    <a class="card-v2 hover-lift" href="{{ url_for('collaboration.team_detail', slug=team.slug) }}" style="text-decoration:none;">
-                        <div class="badge-v2 badge-v2--primary" style="margin-bottom:var(--sp-3);">{{ team.visibility|title }}</div>
-                        <h3 style="font-size:var(--text-lg);margin-bottom:var(--sp-2);color:var(--text-primary);">{{ team.name }}</h3>
-                        <p style="color:var(--text-muted);font-size:var(--text-sm);line-height:1.5;">{{ team.description or 'Shared project workspace' }}</p>
-                    </a>
-                    {% else %}
-                    <div class="empty-v2"><div class="empty-v2__title">No teams yet</div><div class="empty-v2__desc">Create a private workspace for projects, hiring, and team updates.</div></div>
-                    {% endfor %}
+
+        <div class="app-content collab-page">
+            <section class="collab-hero animate-fade-up">
+                <div>
+                    <p class="collab-hero__eyebrow">Private workspaces</p>
+                    <h1 class="collab-hero__title">Build with teams, invites, and clear roles.</h1>
+                    <p class="collab-hero__desc">Create private project rooms, invite members by username or email, manage permissions, and track team activity from one place.</p>
+                </div>
+                <div class="collab-hero__actions">
+                    <a href="{{ url_for('collaboration.create_team') }}" class="btn-v2 btn-v2--primary">Create Workspace</a>
+                    <a href="{{ url_for('messages.inbox') }}" class="btn-v2 btn-v2--secondary">Open Messages</a>
                 </div>
             </section>
 
-            <section class="grid-2" style="align-items:start;">
-                <div class="card-v2">
-                    <h2 style="font-size:var(--text-lg);margin-bottom:var(--sp-4);">Invitations</h2>
-                    {% for invite in invitations %}
-                    <div style="padding:var(--sp-3) 0;border-top:1px solid var(--border-subtle);">
-                        <strong>{{ invite.team.name }}</strong>
-                        <p style="margin:var(--sp-1) 0 var(--sp-3);color:var(--text-muted);">{{ invite.message or 'Team invitation' }}</p>
-                        <form method="post" action="{{ url_for('collaboration.respond_invitation', invitation_id=invite.id, decision='accept') }}" style="display:inline-flex;margin-right:var(--sp-2);"><button class="btn-v2 btn-v2--primary btn-v2--sm">Accept</button></form>
-                        <form method="post" action="{{ url_for('collaboration.respond_invitation', invitation_id=invite.id, decision='decline') }}" style="display:inline-flex;"><button class="btn-v2 btn-v2--secondary btn-v2--sm">Decline</button></form>
+            <section class="collab-grid">
+                <div class="collab-stack">
+                    <div class="collab-card">
+                        <div class="collab-card__header">
+                            <h2 class="collab-card__title">Your Workspaces</h2>
+                            <span class="badge-v2 badge-v2--primary">{{ teams|length }}</span>
+                        </div>
+                        <div class="team-grid">
+                            {% for team in teams %}
+                            <a class="team-card" href="{{ url_for('collaboration.team_detail', slug=team.slug) }}">
+                                <div class="team-card__top">
+                                    <h3 class="team-card__title">{{ team.name }}</h3>
+                                    <span class="badge-v2 {{ 'badge-v2--success' if team.visibility == 'workspace' else 'badge-v2--primary' }}">{{ team.visibility|title }}</span>
+                                </div>
+                                <p class="team-card__desc">{{ team.description or 'Private collaboration workspace.' }}</p>
+                                <div class="team-card__stats">
+                                    <span class="badge-v2 badge-v2--accent">{{ team.members.count() }} members</span>
+                                    <span class="badge-v2 badge-v2--info">{{ team.activities.count() }} updates</span>
+                                </div>
+                            </a>
+                            {% else %}
+                            <div class="collab-empty" style="grid-column:1/-1;">
+                                <div class="collab-empty__title">No teams yet</div>
+                                <p>Create a workspace for projects, robotics builds, hiring, or private community planning.</p>
+                                <a href="{{ url_for('collaboration.create_team') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Create your first workspace</a>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
-                    {% else %}<p style="color:var(--text-muted);">No pending invitations.</p>{% endfor %}
-                </div>
-                <div class="card-v2">
-                    <h2 style="font-size:var(--text-lg);margin-bottom:var(--sp-4);">Collaboration Requests</h2>
-                    {% for request_item in requests %}
-                    <div style="padding:var(--sp-3) 0;border-top:1px solid var(--border-subtle);">
-                        <strong>{{ request_item.subject }}</strong>
-                        <p style="margin:var(--sp-1) 0;color:var(--text-muted);">From {{ request_item.requester.username }} as {{ request_item.requested_role }}</p>
-                        {% if request_item.message %}<p style="margin:0 0 var(--sp-3);">{{ request_item.message }}</p>{% endif %}
-                        <form method="post" action="{{ url_for('collaboration.respond_request', request_id=request_item.id, decision='accept') }}" style="display:inline-flex;margin-right:var(--sp-2);"><button class="btn-v2 btn-v2--primary btn-v2--sm">Accept</button></form>
-                        <form method="post" action="{{ url_for('collaboration.respond_request', request_id=request_item.id, decision='decline') }}" style="display:inline-flex;"><button class="btn-v2 btn-v2--secondary btn-v2--sm">Decline</button></form>
+
+                    <div class="collab-card">
+                        <div class="collab-card__header">
+                            <h2 class="collab-card__title">Incoming Requests</h2>
+                            <span class="badge-v2 badge-v2--warning">{{ requests|length }}</span>
+                        </div>
+                        <div class="request-list">
+                            {% for request_item in requests %}
+                            <div class="request-row">
+                                <div class="request-row__top">
+                                    <div>
+                                        <div class="request-row__title">{{ request_item.subject }}</div>
+                                        <div class="request-row__meta">From @{{ request_item.requester.username }} as {{ request_item.requested_role }}</div>
+                                    </div>
+                                    <span class="badge-v2 badge-v2--warning">{{ request_item.status }}</span>
+                                </div>
+                                {% if request_item.message %}<p class="request-row__message">{{ request_item.message }}</p>{% endif %}
+                                <div class="request-row__actions">
+                                    <form method="post" action="{{ url_for('collaboration.respond_request', request_id=request_item.id, decision='accept') }}"><button class="btn-v2 btn-v2--primary btn-v2--sm">Accept</button></form>
+                                    <form method="post" action="{{ url_for('collaboration.respond_request', request_id=request_item.id, decision='decline') }}"><button class="btn-v2 btn-v2--secondary btn-v2--sm">Decline</button></form>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="collab-empty"><div class="collab-empty__title">No pending requests</div><p>Requests from collaborators will appear here.</p></div>
+                            {% endfor %}
+                        </div>
                     </div>
-                    {% else %}<p style="color:var(--text-muted);">No pending requests.</p>{% endfor %}
                 </div>
+
+                <aside class="collab-stack">
+                    <div class="collab-card">
+                        <div class="collab-card__header">
+                            <h2 class="collab-card__title">Team Invitations</h2>
+                            <span class="badge-v2 badge-v2--accent">{{ invitations|length }}</span>
+                        </div>
+                        <div class="request-list">
+                            {% for invite in invitations %}
+                            <div class="request-row">
+                                <div class="request-row__title">{{ invite.team.name }}</div>
+                                <div class="request-row__meta">Invited by @{{ invite.inviter.username if invite.inviter else 'team' }} as {{ invite.role }}</div>
+                                {% if invite.message %}<p class="request-row__message">{{ invite.message }}</p>{% endif %}
+                                <div class="request-row__actions">
+                                    <form method="post" action="{{ url_for('collaboration.respond_invitation', invitation_id=invite.id, decision='accept') }}"><button class="btn-v2 btn-v2--primary btn-v2--sm">Accept</button></form>
+                                    <form method="post" action="{{ url_for('collaboration.respond_invitation', invitation_id=invite.id, decision='decline') }}"><button class="btn-v2 btn-v2--secondary btn-v2--sm">Decline</button></form>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="collab-empty"><div class="collab-empty__title">No invitations</div><p>Private workspace invites land here.</p></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="collab-card">
+                        <div class="collab-card__header"><h2 class="collab-card__title">Sent Requests</h2></div>
+                        <div class="request-list">
+                            {% for sent in sent_requests %}
+                            <div class="request-row">
+                                <div class="request-row__top">
+                                    <div>
+                                        <div class="request-row__title">{{ sent.subject }}</div>
+                                        <div class="request-row__meta">To @{{ sent.recipient.username }} as {{ sent.requested_role }}</div>
+                                    </div>
+                                    <span class="badge-v2 {{ 'badge-v2--success' if sent.status == 'accepted' else 'badge-v2--warning' if sent.status == 'pending' else 'badge-v2--error' }}">{{ sent.status }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="collab-empty"><div class="collab-empty__title">Nothing sent yet</div><p>Use profile pages or project pages to request collaboration.</p></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </aside>
             </section>
         </div>
     </div>

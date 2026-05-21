@@ -49,9 +49,18 @@ def create_notification(
     db.session.add(notification)
     if commit:
         db.session.commit()
+    else:
+        db.session.flush()
 
     preference_name = EMAIL_PREFERENCE_BY_ACTION.get(action)
     allowed_by_preference = getattr(user, preference_name, True) if preference_name else True
+    if current_app.config.get("MAIL_SUPPRESS_SEND"):
+        notification.email_status = "skipped"
+        if commit:
+            db.session.commit()
+        emit_notification(user.id, serialize_notification(notification))
+        return notification
+
     if send_mail and allowed_by_preference and user.email:
         try:
             if commit:

@@ -1,12 +1,11 @@
-import multiprocessing
 import os
 
 port = os.getenv("PORT", "10000")
 
 bind = f"0.0.0.0:{port}"
 
-workers = int(os.getenv("WEB_CONCURRENCY", multiprocessing.cpu_count() * 2 + 1))
-threads = int(os.getenv("GUNICORN_THREADS", "2"))
+workers = int(os.getenv("WEB_CONCURRENCY", "1"))
+threads = int(os.getenv("GUNICORN_THREADS", "4"))
 timeout = int(os.getenv("GUNICORN_TIMEOUT", "60"))
 graceful_timeout = int(os.getenv("GUNICORN_GRACEFUL_TIMEOUT", "30"))
 max_requests = int(os.getenv("GUNICORN_MAX_REQUESTS", "1000"))

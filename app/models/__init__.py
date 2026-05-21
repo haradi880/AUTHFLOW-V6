@@ -695,11 +695,23 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     recipient_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     content = db.Column(db.Text, nullable=False)
+    attachment_filename = db.Column(db.String(255))
+    attachment_original_name = db.Column(db.String(255))
+    attachment_mime = db.Column(db.String(120))
+    attachment_size = db.Column(db.Integer)
     is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     sender = db.relationship("User", foreign_keys=[sender_id], backref=db.backref("sent_messages", lazy="dynamic"))
     recipient = db.relationship("User", foreign_keys=[recipient_id], backref=db.backref("received_messages", lazy="dynamic"))
+
+    @property
+    def has_attachment(self):
+        return bool(self.attachment_filename)
+
+    @property
+    def attachment_is_image(self):
+        return bool((self.attachment_mime or "").startswith("image/"))
 
 
 # =====================================================

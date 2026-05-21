@@ -1,43 +1,77 @@
 {% extends "base.html" %}
-{% block title %}{{ team.name }} - AuthFlow{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
+{% block title %}{{ team.name }} - {{ config.APP_NAME }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/collaboration.css') }}">
+{% endblock %}
 {% block content %}
 <div class="app-shell">
     {% include 'components/sidebar.html' %}
     <div class="app-main">
         <nav class="topnav-v2">
-            <div class="topnav-v2__left"><div class="topnav-v2__breadcrumb"><a class="topnav-v2__kicker" href="{{ url_for('collaboration.hub') }}">Collaboration</a><span class="topnav-v2__sep">/</span><span class="topnav-v2__title">{{ team.name }}</span></div></div>
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+                <div class="topnav-v2__breadcrumb"><a class="topnav-v2__kicker" href="{{ url_for('collaboration.hub') }}">Collaboration</a><span class="topnav-v2__sep">/</span><span class="topnav-v2__title">{{ team.name }}</span></div>
+            </div>
         </nav>
-        <div class="app-content" style="display:grid;gap:var(--sp-6);">
-            <section class="card-v2">
-                <div style="display:flex;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;">
-                    <div><h1 style="font-size:var(--text-2xl);margin-bottom:var(--sp-2);">{{ team.name }}</h1><p style="color:var(--text-muted);">{{ team.description or 'Shared workspace' }}</p></div>
+
+        <div class="app-content collab-page">
+            <section class="collab-hero">
+                <div>
+                    <p class="collab-hero__eyebrow">{{ team.visibility|title }} workspace</p>
+                    <h1 class="collab-hero__title">{{ team.name }}</h1>
+                    <p class="collab-hero__desc">{{ team.description or 'Shared workspace for members, invites, project context, and activity.' }}</p>
+                </div>
+                <div class="collab-hero__actions">
                     <span class="badge-v2 badge-v2--primary">{{ member.role if member else 'admin' }}</span>
+                    <span class="badge-v2 badge-v2--accent">{{ team.members.count() }} members</span>
                 </div>
             </section>
+
             {% if team.can_manage(current_user) %}
-            <form class="card-v2" method="post" action="{{ url_for('collaboration.invite_to_team', team_id=team.id) }}">
+            <form class="collab-card collab-form" method="post" action="{{ url_for('collaboration.invite_to_team', team_id=team.id) }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <h2 style="font-size:var(--text-lg);margin-bottom:var(--sp-4);">Invite Member</h2>
-                <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:var(--sp-3);align-items:end;">
-                    <label class="form-group-v2"><span class="label-v2">Username or email</span><input class="input-v2" name="user" required></label>
-                    <label class="form-group-v2"><span class="label-v2">Role</span><select class="input-v2" name="role"><option value="member">Member</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></label>
-                    <button class="btn-v2 btn-v2--primary">Invite</button>
+                <div class="collab-card__header">
+                    <h2 class="collab-card__title">Invite Member</h2>
+                    <span class="badge-v2 badge-v2--info">Private invite</span>
                 </div>
+                <div class="collab-form-grid">
+                    <label class="form-group-v2"><span class="label-v2">Username or email</span><input class="input-v2" name="user" placeholder="builder or builder@example.com" required></label>
+                    <label class="form-group-v2"><span class="label-v2">Role</span><select class="input-v2" name="role"><option value="member">Member</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></label>
+                    <button class="btn-v2 btn-v2--primary">Send Invite</button>
+                </div>
+                <label class="form-group-v2"><span class="label-v2">Invite note</span><textarea class="input-v2" name="message" rows="3" maxlength="500" placeholder="Add context about the project, role, or community plan."></textarea></label>
             </form>
             {% endif %}
-            <section class="grid-2" style="align-items:start;">
-                <div class="card-v2">
-                    <h2 style="font-size:var(--text-lg);margin-bottom:var(--sp-4);">Members</h2>
-                    {% for team_member in team.members.order_by('role').all() %}
-                    <div style="display:flex;justify-content:space-between;padding:var(--sp-3) 0;border-top:1px solid var(--border-subtle);"><span>{{ team_member.user.username }}</span><span class="badge-v2 badge-v2--secondary">{{ team_member.role }}</span></div>
-                    {% endfor %}
+
+            <section class="collab-grid">
+                <div class="collab-card">
+                    <div class="collab-card__header"><h2 class="collab-card__title">Members</h2></div>
+                    <div class="member-list">
+                        {% for team_member in team.members.order_by('role').all() %}
+                        <div class="member-row">
+                            <div>
+                                <div class="member-row__name">@{{ team_member.user.username }}</div>
+                                <div class="request-row__meta">{{ team_member.user.full_name or 'Team member' }}</div>
+                            </div>
+                            <span class="badge-v2 {{ 'badge-v2--primary' if team_member.role in ['owner', 'admin'] else 'badge-v2--secondary' }}">{{ team_member.role }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
-                <div class="card-v2">
-                    <h2 style="font-size:var(--text-lg);margin-bottom:var(--sp-4);">Activity</h2>
-                    {% for activity in activities %}
-                    <div style="padding:var(--sp-3) 0;border-top:1px solid var(--border-subtle);"><p style="margin:0;">{{ activity.summary }}</p><time class="js-local-time" datetime="{{ activity.created_at.isoformat() }}Z" data-format="datetime" style="font-size:var(--text-xs);color:var(--text-muted);">{{ activity.created_at.strftime('%b %d, %H:%M') }}</time></div>
-                    {% else %}<p style="color:var(--text-muted);">No activity yet.</p>{% endfor %}
+
+                <div class="collab-card">
+                    <div class="collab-card__header"><h2 class="collab-card__title">Activity</h2></div>
+                    <div class="activity-list">
+                        {% for activity in activities %}
+                        <div class="activity-row">
+                            <p class="activity-row__summary">{{ activity.summary }}</p>
+                            <time class="activity-row__time js-local-time" datetime="{{ activity.created_at.isoformat() }}Z" data-format="datetime">{{ activity.created_at.strftime('%b %d, %H:%M') }}</time>
+                        </div>
+                        {% else %}
+                        <div class="collab-empty"><div class="collab-empty__title">No activity yet</div><p>Invites, joins, and collaboration updates appear here.</p></div>
+                        {% endfor %}
+                    </div>
                 </div>
             </section>
         </div>

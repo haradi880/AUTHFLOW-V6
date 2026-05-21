@@ -31,6 +31,15 @@ def is_safe_redirect_url(target):
     return test_url.scheme in {"http", "https"} and ref_url.netloc == test_url.netloc
 
 
+def clear_login_state():
+    remember_cookie_name = current_app.config.get("REMEMBER_COOKIE_NAME", "remember_token")
+    should_clear_remember = remember_cookie_name in request.cookies
+    logout_user()
+    session.clear()
+    if should_clear_remember:
+        session["_remember"] = "clear"
+
+
 @auth_bp.route("/register", methods=["GET", "POST"])
 @rate_limit(max_calls=8, window_seconds=300, scope="register")
 def register():
@@ -166,8 +175,7 @@ def logout():
     if public_id:
         revoke_session(current_user, public_id)
     audit_log(AuditEventType.LOGOUT, description="User logged out")
-    logout_user()
-    session.clear()
+    clear_login_state()
     flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
 
@@ -316,8 +324,7 @@ def delete_account():
             db.session.commit()
             
             # 5. Clear session
-            logout_user()
-            session.clear()
+            clear_login_state()
             
             flash(f"Account {username} has been permanently deleted along with all associated content.", "success")
             return redirect(url_for("auth.login"))
