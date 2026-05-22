@@ -113,7 +113,35 @@ def register_security(app):
         if request.endpoint in {"static", "uploaded_file"}:
             return None
 
+        suspended_allowed_endpoints = {
+            "auth.account_suspended",
+            "auth.account_deleted",
+            "auth.logout",
+            "main.support",
+            "main.submit_support_ticket",
+            "main.robots_txt",
+            "main.sitemap",
+            "main.healthz",
+        }
+        session_user_id = session.get("_user_id")
+        if session_user_id:
+            from app.models import User
+
+            try:
+                session_user = db.session.get(User, int(session_user_id))
+            except (TypeError, ValueError):
+                session_user = None
+            if session_user and not session_user.active:
+                session["suspended_account_email"] = session_user.email
+                session["suspended_account_username"] = session_user.username
+                if request.endpoint not in suspended_allowed_endpoints:
+                    return redirect(url_for("auth.account_suspended"))
+
         if current_user.is_authenticated:
+            if not current_user.active:
+                if request.endpoint not in suspended_allowed_endpoints:
+                    return redirect(url_for("auth.account_suspended"))
+
             from app.services.security import touch_current_session
 
             now = int(time.time())
@@ -234,10 +262,26 @@ def register_template_helpers(app):
 def register_upload_route(app):
     @app.get("/uploads/<folder>/<path:filename>", endpoint="uploaded_file")
     def uploaded_file(folder, filename):
+        from app.utils.uploads import supabase_public_url
+
         allowed_folders = {"avatars", "banners", "blogs", "projects", "devlogs", "messages"}
         if folder not in allowed_folders:
             abort(404)
-        return send_from_directory(Path(app.config["UPLOAD_FOLDER"]) / folder, filename)
+        if Path(filename).name != filename:
+            abort(404)
+        upload_root = Path(app.config["UPLOAD_FOLDER"]).resolve()
+        folder_path = (upload_root / folder).resolve()
+        file_path = (folder_path / filename).resolve()
+        if upload_root not in file_path.parents:
+            abort(404)
+        if file_path.exists():
+            return send_from_directory(folder_path, filename)
+
+        public_url = supabase_public_url(folder, filename)
+        if public_url:
+            return redirect(public_url)
+
+        abort(404)
 
 
 def register_well_known_routes(app):
@@ -422,6 +466,9 @@ def ensure_runtime_schema(app):
                 for name, column_type in columns.items():
                     if name not in existing_columns:
                         connection.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {name} {column_type}")
+
+        if not inspector.has_table("support_tickets"):
+            db.create_all()
 
 
 def configure_logging(app):

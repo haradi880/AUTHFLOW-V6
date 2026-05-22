@@ -112,9 +112,13 @@
                 Settings
             </a>
             {% if session.get('is_admin') %}
-            <a href="/admin" class="nav-v2 {{ 'active' if request.path.startswith('/admin') }}">
+            <a href="/admin" class="nav-v2 {{ 'active' if request.path == '/admin/' or request.path == '/admin' }}">
                 <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
                 Admin
+            </a>
+            <a href="{{ url_for('admin.backup_index') }}" class="nav-v2 {{ 'active' if request.path.startswith('/admin/backup') }}">
+                <svg class="nav-v2__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Backups
             </a>
             {% endif %}
         </div>

@@ -32,6 +32,34 @@
                 </table>
             </section>
 
+            <section class="card-v2" style="margin-bottom:var(--sp-5);overflow:auto;">
+                <div class="section-header"><h2 class="section-header__title">Support Requests</h2></div>
+                {% for ticket in support_tickets %}
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--sp-4);padding:var(--sp-4) 0;border-top:1px solid var(--border-subtle);">
+                    <div>
+                        <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-2);">
+                            <span class="badge-v2 badge-v2--{{ 'error' if ticket.priority == 'high' else 'info' }}">{{ ticket.priority|title }}</span>
+                            <span class="badge-v2 badge-v2--primary">{{ ticket.category|replace('_',' ')|title }}</span>
+                            <span class="badge-v2 badge-v2--warning">{{ ticket.status|replace('-',' ')|title }}</span>
+                        </div>
+                        <strong>{{ ticket.subject }}</strong>
+                        <p style="color:var(--text-secondary);margin:var(--sp-1) 0;">{{ ticket.message|truncate(220) }}</p>
+                        <small style="color:var(--text-muted);">{{ ticket.email }} {% if ticket.username %}· @{{ ticket.username }}{% endif %} · {{ ticket.created_at.strftime('%b %d %H:%M') }} · Ref {{ ticket.public_id }}</small>
+                    </div>
+                    <form method="post" action="{{ url_for('admin.update_support_ticket_status', ticket_id=ticket.id) }}" style="display:grid;gap:var(--sp-2);min-width:220px;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <select class="input-v2" name="status">
+                            {% for status in ['open', 'reviewing', 'waiting-user', 'resolved', 'closed'] %}
+                            <option value="{{ status }}" {{ 'selected' if ticket.status == status }}>{{ status|replace('-',' ')|title }}</option>
+                            {% endfor %}
+                        </select>
+                        <input class="input-v2" name="admin_note" value="{{ ticket.admin_note or '' }}" placeholder="Admin note">
+                        <button class="btn-v2 btn-v2--secondary btn-v2--sm" type="submit">Update</button>
+                    </form>
+                </div>
+                {% else %}<p style="color:var(--text-muted);">No support requests.</p>{% endfor %}
+            </section>
+
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-5);">
                 <section class="card-v2" style="overflow:auto;">
                     <div class="section-header"><h2 class="section-header__title">Login Events</h2></div>

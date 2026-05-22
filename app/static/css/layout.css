@@ -322,7 +322,7 @@
     height: var(--mobile-nav-h);
     background: var(--surface-2);
     border-top: 1px solid var(--border-subtle);
-    z-index: 1000;
+    z-index: 1150;
     padding-bottom: env(safe-area-inset-bottom);
 }
 .mobile-nav-v2__inner {
@@ -496,7 +496,15 @@
     .app-content {
         padding: var(--sp-4);
         padding-top: calc(var(--topnav-h) + var(--sp-4));
-        padding-bottom: calc(var(--mobile-nav-h) + var(--sp-6));
+        padding-bottom: calc(var(--mobile-nav-h) + var(--sp-8) + env(safe-area-inset-bottom));
+    }
+
+    .main-content,
+    .feed-shell,
+    .settings-shell,
+    .messages-shell,
+    .auth-container {
+        padding-bottom: calc(var(--mobile-nav-h) + var(--sp-8) + env(safe-area-inset-bottom));
     }
 
     .grid-auto { grid-template-columns: 1fr; }
@@ -578,7 +586,11 @@
 
 @media (max-width: 480px) {
     .grid-4 { grid-template-columns: 1fr; }
-    .app-content { padding: var(--sp-3); padding-top: calc(var(--topnav-h) + var(--sp-3)); }
+    .app-content {
+        padding: var(--sp-3);
+        padding-top: calc(var(--topnav-h) + var(--sp-3));
+        padding-bottom: calc(var(--mobile-nav-h) + var(--sp-8) + env(safe-area-inset-bottom));
+    }
     .hero-v2 { padding: var(--sp-5); }
     .hero-v2__actions { flex-direction: column; width: 100%; }
     .hero-v2__actions .btn-v2 { width: 100%; }

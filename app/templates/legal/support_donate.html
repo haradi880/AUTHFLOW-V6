@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Donate to AuthFlow - UPI Donation{% endblock %}
+{% block meta_desc %}Support AuthFlow development with a UPI donation and help keep the developer and robotics community growing.{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/support.css') }}">
+{% endblock %}
+
+{% block content %}
+<main class="support-main">
+    <section class="support-shell">
+        <div class="support-copy">
+            <span class="support-kicker">UPI donations</span>
+            <h1>Support the platform with a fast UPI contribution.</h1>
+            <p>Choose an amount, scan the QR code, or open your UPI app directly on mobile. Donation intents are logged for abuse prevention and account history.</p>
+        </div>
+
+        <div class="support-layout">
+            <section class="support-panel qr-panel" aria-live="polite">
+                <div class="qr-frame">
+                    <img id="qrCodeImage" src="" alt="UPI donation QR code">
+                    <div id="qrLoading" class="qr-loading" hidden>
+                        <div class="spinner"></div>
+                        <span>Generating secure QR</span>
+                    </div>
+                </div>
+                <div class="qr-summary">
+                    <span>Selected amount</span>
+                    <strong id="selectedAmount">INR 49.00</strong>
+                </div>
+                <a id="upiLink" href="#" class="btn-v2 btn-v2--primary">Open UPI App</a>
+                <form id="completeDonationForm" method="post" action="#" hidden>
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn-v2 btn-v2--secondary" type="submit">I Have Paid</button>
+                </form>
+            </section>
+
+            <section class="support-panel">
+                <h2>Choose Amount</h2>
+                <div class="amount-grid">
+                    {% for amount in preset_amounts %}
+                    <button class="amount-btn" type="button" data-amount="{{ amount }}">INR {{ amount }}</button>
+                    {% endfor %}
+                </div>
+                <label class="custom-amount">
+                    <span>Custom amount</span>
+                    <input id="customAmount" type="number" min="1" max="999999" step="1" value="100" inputmode="numeric">
+                </label>
+                <button id="customAmountButton" class="btn-v2 btn-v2--secondary" type="button">Generate Custom QR</button>
+
+                <div class="support-notes">
+                    <div><strong>Mobile ready</strong><span>Open directly in any UPI app.</span></div>
+                    <div><strong>Privacy aware</strong><span>We store only amount, status, IP, user agent, and account link if signed in.</span></div>
+                    <div><strong>Safe limits</strong><span>Amounts are validated server-side and QR generation is rate limited.</span></div>
+                </div>
+            </section>
+        </div>
+    </section>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedDonationId = null;
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.amount-btn').forEach((button) => {
+        button.addEventListener('click', () => selectAmount(button.dataset.amount, button));
+    });
+    document.getElementById('customAmountButton')?.addEventListener('click', donateCustomAmount);
+    document.getElementById('customAmount')?.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            donateCustomAmount();
+        }
+    });
+    const first = document.querySelector('.amount-btn');
+    selectAmount(first?.dataset.amount || 49, first);
+});
+
+async function generateQRCode(amount) {
+    const qrImage = document.getElementById('qrCodeImage');
+    const qrLoading = document.getElementById('qrLoading');
+    const upiLink = document.getElementById('upiLink');
+    const selectedAmount = document.getElementById('selectedAmount');
+    const completeForm = document.getElementById('completeDonationForm');
+
+    qrLoading.hidden = false;
+    qrImage.hidden = true;
+
+    try {
+        const response = await fetch('{{ url_for("main.generate_qr") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.AuthFlow.csrfToken},
+            body: JSON.stringify({amount})
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Unable to generate QR');
+
+        selectedDonationId = data.donation_id;
+        qrImage.src = 'data:image/png;base64,' + data.qr_code;
+        qrImage.hidden = false;
+        upiLink.href = data.upi_link;
+        selectedAmount.textContent = 'INR ' + data.amount;
+                completeForm.action = `/support/donations/${selectedDonationId}/complete`;
+        completeForm.hidden = false;
+        qrLoading.hidden = true;
+    } catch (error) {
+        qrLoading.hidden = true;
+        if (window.toast) toast.show(error.message || 'Failed to generate QR code', 'error');
+    }
+}
+
+function selectAmount(amount, button) {
+    document.getElementById('customAmount').value = amount;
+    document.querySelectorAll('.amount-btn').forEach((item) => item.classList.remove('selected'));
+    button?.classList.add('selected');
+    generateQRCode(amount);
+}
+
+function donateCustomAmount() {
+    const amount = Number(document.getElementById('customAmount').value);
+    if (!Number.isFinite(amount) || amount < 1 || amount > 999999) {
+        if (window.toast) toast.show('Enter an amount between INR 1 and INR 999999.', 'error');
+        return;
+    }
+    document.querySelectorAll('.amount-btn').forEach((item) => item.classList.remove('selected'));
+    generateQRCode(amount);
+}
+</script>
+{% endblock %}

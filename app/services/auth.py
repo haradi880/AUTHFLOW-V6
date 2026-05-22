@@ -87,6 +87,8 @@ def authenticate_user(email, password):
         )
         db.session.commit()
         return user, "Invalid email or password."
+    if not user.active:
+        return user, "This account has been suspended. Please contact support if you believe this is a mistake."
     if not user.is_verified:
         return user, "Please verify your email before logging in."
     user.clear_failed_logins()

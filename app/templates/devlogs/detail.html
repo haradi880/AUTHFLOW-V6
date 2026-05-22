@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block title %}DevLog by @{{ devlog.author.username }} — AuthFlow{% endblock %}
+{% block meta_desc %}{{ devlog.content|striptags|truncate(155, true, '') }}{% endblock %}
+{% block canonical_url %}{{ url_for('devlogs.detail', devlog_id=devlog.id, _external=True) }}{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/devlogs.css') }}">

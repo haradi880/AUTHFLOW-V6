@@ -1062,6 +1062,34 @@ class DonationIntent(db.Model):
     )
 
 
+class SupportTicket(TimestampMixin, db.Model):
+    __tablename__ = "support_tickets"
+
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    username = db.Column(db.String(80))
+    category = db.Column(db.String(40), default="general", nullable=False, index=True)
+    subject = db.Column(db.String(180), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(30), default="open", nullable=False, index=True)
+    priority = db.Column(db.String(20), default="normal", nullable=False, index=True)
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.String(500))
+    resolved_at = db.Column(db.DateTime)
+    handled_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"))
+    admin_note = db.Column(db.String(1000))
+
+    user = db.relationship("User", foreign_keys=[user_id], backref=db.backref("support_tickets", lazy="dynamic"))
+    handled_by = db.relationship("User", foreign_keys=[handled_by_id])
+
+    __table_args__ = (
+        db.Index("ix_support_tickets_status_created", "status", "created_at"),
+        db.Index("ix_support_tickets_category_status", "category", "status"),
+    )
+
+
 # =====================================================
 #  ROBOTICS HUB
 # =====================================================

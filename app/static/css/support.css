@@ -41,6 +41,10 @@
     align-items: start;
 }
 
+.support-layout--help {
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr);
+}
+
 .support-panel {
     border: 1px solid var(--border-subtle);
     border-radius: var(--r-xl);
@@ -52,6 +56,27 @@
 .support-panel h2 {
     font-size: var(--text-xl);
     margin: 0 0 var(--sp-4);
+}
+
+.support-form {
+    display: grid;
+    gap: var(--sp-4);
+}
+
+.support-form label {
+    display: grid;
+    gap: var(--sp-2);
+}
+
+.support-form label > span {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.support-form textarea.input-v2 {
+    min-height: 160px;
+    resize: vertical;
 }
 
 .qr-panel {

@@ -24,6 +24,7 @@ class AuditEventType(Enum):
     PASSWORD_RESET = "password_reset"
     ACCOUNT_CREATED = "account_created"
     ACCOUNT_DELETED = "account_deleted"
+    SUPPORT_REQUEST_CREATED = "support_request_created"
     EMAIL_CHANGED = "email_changed"
     
     # Authorization events

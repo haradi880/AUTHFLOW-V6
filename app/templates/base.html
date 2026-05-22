@@ -5,7 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="description" content="{% block meta_desc %}AuthFlow — Developer ecosystem for creators, builders, and robotics engineers{% endblock %}">
-    <title>{% block title %}AuthFlow{% endblock %}</title>
+    <meta name="robots" content="index,follow">
+    <link rel="canonical" href="{% block canonical_url %}{{ request.base_url }}{% endblock %}">
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="{{ url_for('main.sitemap', _external=True) }}">
+    <meta property="og:site_name" content="{{ config.APP_NAME or 'AuthFlow' }}">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{% block title %}AuthFlow{% endblock %}{% endblock %}">
+    <meta property="og:description" content="{% block og_desc %}{{ self.meta_desc() }}{% endblock %}">
+    <meta property="og:url" content="{{ self.canonical_url() }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ self.og_title() }}">
+    <meta name="twitter:description" content="{{ self.og_desc() }}">
+    <title>{{ self.title() }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

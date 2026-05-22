@@ -21,6 +21,26 @@ services:
         value: "4"
       - key: EMAIL_BACKEND
         value: auto
+      - key: EMAIL_DELIVERY_ORDER
+        value: resend,sendgrid,smtp,file
+      - key: EMAIL_FILE_FALLBACK
+        value: "true"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: UPLOAD_STORAGE_BUCKET
+        value: uploads
+      - key: BACKUP_STORAGE_BUCKET
+        value: backups
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
@@ -66,6 +86,26 @@ services:
         value: "true"
       - key: EMAIL_BACKEND
         value: auto
+      - key: EMAIL_DELIVERY_ORDER
+        value: resend,sendgrid,smtp,file
+      - key: EMAIL_FILE_FALLBACK
+        value: "true"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: UPLOAD_STORAGE_BUCKET
+        value: uploads
+      - key: BACKUP_STORAGE_BUCKET
+        value: backups
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD

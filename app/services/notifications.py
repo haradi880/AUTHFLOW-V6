@@ -20,6 +20,8 @@ EMAIL_PREFERENCE_BY_ACTION = {
     "team_invitation": None,
     "collaboration_request": None,
     "collaboration_update": None,
+    "support_ticket_admin": None,
+    "support_ticket_received": None,
 }
 
 
@@ -127,5 +129,7 @@ def _subject_for(action):
         "team_invitation": "You were invited to a team",
         "collaboration_request": "New collaboration request",
         "collaboration_update": "Collaboration update",
+        "support_ticket_admin": "New support request",
+        "support_ticket_received": "Support request received",
     }
     return labels.get(action, "New notification")

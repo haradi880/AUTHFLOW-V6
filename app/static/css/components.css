@@ -200,7 +200,7 @@
     .cookie-banner {
         left: var(--spacing-md);
         right: var(--spacing-md);
-        bottom: max(var(--spacing-md), env(safe-area-inset-bottom));
+        bottom: calc(var(--mobile-nav-h, 60px) + var(--spacing-md) + env(safe-area-inset-bottom));
         align-items: flex-start;
         flex-direction: column;
     }

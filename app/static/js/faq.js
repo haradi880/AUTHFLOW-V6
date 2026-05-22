@@ -3,6 +3,7 @@ class FAQCenter {
         this.search = document.getElementById('faqSearch');
         this.filters = document.getElementById('faqFilters');
         this.items = Array.from(document.querySelectorAll('.faq-item'));
+        this.empty = document.getElementById('faqEmpty');
         this.category = 'all';
         this.bind();
     }
@@ -26,11 +27,15 @@ class FAQCenter {
 
     apply() {
         const term = (this.search?.value || '').trim().toLowerCase();
+        let visible = 0;
         this.items.forEach((item) => {
             const matchesCategory = this.category === 'all' || item.dataset.category === this.category;
             const matchesSearch = !term || item.dataset.search.includes(term);
-            item.hidden = !(matchesCategory && matchesSearch);
+            const show = matchesCategory && matchesSearch;
+            item.hidden = !show;
+            if (show) visible += 1;
         });
+        if (this.empty) this.empty.hidden = visible !== 0;
     }
 }
 

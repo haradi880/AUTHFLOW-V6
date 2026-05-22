@@ -168,6 +168,12 @@
     font-size: 0.8125rem;
 }
 
+/* Ensure composer controls aren't hidden behind fixed footers on mobile */
+.composer-footer {
+    position: relative;
+    z-index: 11001;
+}
+
 .signed-out-composer p {
     color: var(--text-secondary);
 }

@@ -106,6 +106,11 @@ class Config:
     REDIS_URL = os.getenv("REDIS_URL") or os.getenv("RATELIMIT_STORAGE_URI") or "redis://localhost:6379/0"
     TASK_QUEUE_ASYNC = _env_bool("TASK_QUEUE_ASYNC", False)
     NOTIFICATION_MAX_RETRIES = _env_int("NOTIFICATION_MAX_RETRIES", 3)
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    UPLOAD_STORAGE_BUCKET = os.getenv("UPLOAD_STORAGE_BUCKET") or "uploads"
+    BACKUP_STORAGE_BUCKET = os.getenv("BACKUP_STORAGE_BUCKET") or "backups"
+    BACKUP_KEEP_LOCAL = _env_int("BACKUP_KEEP_LOCAL", 20)
 
     SECURITY_HEADERS = {
         "X-Content-Type-Options": "nosniff",

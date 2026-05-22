@@ -6,12 +6,81 @@ Handles validation, naming, and saving of uploaded files.
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import quote
+
+import requests
 from PIL import Image
 from flask import current_app
 from werkzeug.utils import secure_filename
 
 
 ALLOWED_UPLOAD_FOLDERS = {'avatars', 'banners', 'blogs', 'projects', 'devlogs', 'messages'}
+
+
+def _supabase_settings():
+    url = (current_app.config.get('SUPABASE_URL') or '').rstrip('/')
+    key = current_app.config.get('SUPABASE_KEY')
+    bucket = current_app.config.get('UPLOAD_STORAGE_BUCKET', 'uploads')
+    return url, key, bucket
+
+
+def upload_to_supabase(filepath, folder, filename, content_type=None):
+    """Mirror a saved upload to Supabase Storage when configured."""
+    if folder not in ALLOWED_UPLOAD_FOLDERS or Path(filename).name != filename:
+        return False
+
+    supa_url, supa_key, bucket = _supabase_settings()
+    if not supa_url or not supa_key:
+        return False
+
+    remote_path = f"{folder}/{filename}"
+    upload_endpoint = f"{supa_url}/storage/v1/object/{bucket}/{remote_path}"
+    headers = {
+        'Authorization': f'Bearer {supa_key}',
+        'apikey': supa_key,
+        'x-upsert': 'true',
+    }
+    if content_type:
+        headers['content-type'] = content_type
+
+    with Path(filepath).open('rb') as file_handle:
+        response = requests.post(upload_endpoint, headers=headers, data=file_handle, timeout=45)
+    if response.status_code not in (200, 201):
+        current_app.logger.info('Supabase upload failed: %s %s', response.status_code, response.text[:200])
+        return False
+    return True
+
+
+def delete_from_supabase(folder, filename):
+    """Delete a mirrored upload from Supabase Storage when configured."""
+    if folder not in ALLOWED_UPLOAD_FOLDERS or Path(filename).name != filename:
+        return False
+
+    supa_url, supa_key, bucket = _supabase_settings()
+    if not supa_url or not supa_key:
+        return False
+
+    endpoint = f"{supa_url}/storage/v1/object/{bucket}"
+    headers = {
+        'Authorization': f'Bearer {supa_key}',
+        'apikey': supa_key,
+        'Content-Type': 'application/json',
+    }
+    response = requests.delete(endpoint, headers=headers, json={"prefixes": [f"{folder}/{filename}"]}, timeout=30)
+    if response.status_code not in (200, 204):
+        current_app.logger.info('Supabase delete failed: %s %s', response.status_code, response.text[:200])
+        return False
+    return True
+
+
+def supabase_public_url(folder, filename):
+    if folder not in ALLOWED_UPLOAD_FOLDERS or Path(filename).name != filename:
+        return None
+    supa_url, _, bucket = _supabase_settings()
+    if not supa_url:
+        return None
+    encoded_path = quote(f"{folder}/{filename}", safe="/")
+    return f"{supa_url}/storage/v1/object/public/{bucket}/{encoded_path}"
 
 
 def save_upload(file, folder, max_size=(1200, 1200)):
@@ -50,7 +119,11 @@ def save_upload(file, folder, max_size=(1200, 1200)):
 
         validate_image(filepath)
         resize_image(filepath, max_size)
-        
+        try:
+            upload_to_supabase(filepath, folder, filename, getattr(file, "mimetype", None))
+        except Exception:
+            current_app.logger.exception('Error uploading to Supabase')
+
         return filename
     except Exception as e:
         current_app.logger.warning("Error saving upload: %s", e)
@@ -132,6 +205,10 @@ def save_message_attachment(file):
 
     try:
         file.save(filepath)
+        try:
+            upload_to_supabase(filepath, 'messages', filename, getattr(file, "mimetype", None))
+        except Exception:
+            current_app.logger.exception('Error uploading message attachment to Supabase')
         return {
             "filename": filename,
             "original_name": secure_filename(file.filename)[:255],
@@ -166,6 +243,10 @@ def save_media_upload(file, folder='devlogs', max_size=(1400, 1400)):
         if media_type == "image":
             validate_image(filepath)
             resize_image(filepath, max_size)
+        try:
+            upload_to_supabase(filepath, folder, filename, getattr(file, "mimetype", None))
+        except Exception:
+            current_app.logger.exception('Error uploading media to Supabase')
         return filename, media_type
     except Exception as e:
         current_app.logger.warning("Error saving media upload: %s", e)
@@ -241,3 +322,7 @@ def delete_file(filename, folder):
             return
         if filepath.exists():
             filepath.unlink()
+        try:
+            delete_from_supabase(folder, filename)
+        except Exception:
+            current_app.logger.exception('Error deleting upload from Supabase')

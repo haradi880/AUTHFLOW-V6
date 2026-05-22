@@ -9,7 +9,9 @@ from app.utils.uploads import (
     allowed_file,
     generate_filename,
     resize_image,
+    upload_to_supabase,
     validate_image,
+    delete_from_supabase,
 )
 
 
@@ -72,6 +74,10 @@ def save_upload_secure(file, folder, max_size=(1200, 1200), max_bytes=None):
         file.save(filepath)
         validate_image(filepath)
         resize_image(filepath, max_size)
+        try:
+            upload_to_supabase(filepath, folder, filename, getattr(file, "mimetype", None))
+        except Exception:
+            current_app.logger.exception("Error uploading secure file to Supabase")
         return filename, None
     except Exception as exc:
         current_app.logger.warning("Secure upload failed for %s: %s", file.filename, exc)
@@ -102,5 +108,9 @@ def delete_file_secure(filename, folder):
 
     if filepath.exists() and filepath.is_file():
         filepath.unlink()
+        try:
+            delete_from_supabase(folder, filename)
+        except Exception:
+            current_app.logger.exception("Error deleting secure file from Supabase")
         return True
     return False

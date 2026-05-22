@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}FAQ — AuthFlow{% endblock %}
+{% block title %}FAQ - AuthFlow Help Center{% endblock %}
+{% block meta_desc %}Find answers about AuthFlow accounts, suspended account recovery, OTP login, blogs, projects, DevLogs, XP, badges, hiring, uploads, privacy, and support.{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/faq.css') }}">
@@ -8,7 +9,7 @@
 {% block content %}
 <div class="app-shell">
     {% include 'components/sidebar.html' %}
-    <div class="app-main faq-shell">
+    <div class="app-main">
         <nav class="topnav-v2">
             <div class="topnav-v2__left">
                 <button class="menu-toggle-v2" type="button" aria-label="Open navigation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
@@ -19,112 +20,99 @@
                 </div>
             </div>
             <div class="topnav-v2__right">
-                <a href="{{ url_for('devlogs.index') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Open DevFeed</a>
+                <a href="{{ url_for('main.support') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Contact Support</a>
             </div>
         </nav>
 
-        <div class="app-content">
-            <section class="hero-v2 animate-fade-up" style="background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(99,102,241,.08),rgba(16,185,129,.06));">
-                <div class="hero-v2__eyebrow">📚 Documentation</div>
-                <h2 class="hero-v2__title">Everything builders need to know.</h2>
+        <main class="app-content faq-page">
+            <section class="faq-hero">
+                <div>
+                    <span class="support-kicker">Documentation</span>
+                    <h1>Answers for using AuthFlow without getting stuck.</h1>
+                    <p>Search by topic or filter by category. If your account is suspended, deleted, or you cannot receive OTP email, use the support request flow so an admin can review it.</p>
+                </div>
+                <div class="faq-quick-card">
+                    <strong>Need Account recovery?</strong>
+                    <span>Use support for recovery, Suspended account review, deleted accounts, login trouble, and privacy requests.</span>
+                    <a class="btn-v2 btn-v2--secondary btn-v2--sm" href="{{ url_for('main.support', reason='account_recovery') }}">Open Support</a>
+                </div>
             </section>
 
-            <div class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
-                <input id="faqSearch" type="search" class="input-v2" placeholder="Search devlogs, XP, challenges, teams..." style="font-size:var(--text-lg);padding:var(--sp-4);">
-            </div>
+            <section class="faq-tools">
+                <label class="faq-search">
+                    <span>Search FAQ</span>
+                    <input id="faqSearch" type="search" placeholder="Search account recovery, OTP, XP, uploads, jobs..." autocomplete="off">
+                </label>
+                <div class="faq-filters" id="faqFilters" aria-label="FAQ categories">
+                    <button type="button" class="active" data-category="all">All</button>
+                    <button type="button" data-category="account">Account</button>
+                    <button type="button" data-category="content">Content</button>
+                    <button type="button" data-category="community">Community</button>
+                    <button type="button" data-category="gamification">XP & Badges</button>
+                    <button type="button" data-category="jobs">Jobs</button>
+                    <button type="button" data-category="security">Security</button>
+                    <button type="button" data-category="support">Support</button>
+                </div>
+            </section>
 
-            <div class="faq-filters" id="faqFilters" style="display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-6);">
-                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm active" data-category="all">All</button>
-                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="core">Core</button>
-                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="ecosystem">Ecosystem</button>
-                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="social">Social</button>
-                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="growth">Growth</button>
-                <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" data-category="security">Security</button>
-            </div>
+            {% set faqs = [
+                ('account', 'What is AuthFlow?', 'AuthFlow is a developer and robotics creator platform for publishing blogs, sharing projects, posting DevLogs, building a portfolio, collaborating, messaging, hiring, and earning reputation.'),
+                ('account', 'How do I create and verify an account?', 'Create an account from the register page, then enter the OTP sent to your email. You cannot fully sign in until your email is verified.'),
+                ('account', 'What should I do if OTP email does not arrive?', 'Check spam and promotions first. Then use the resend OTP button. If email still fails, open a support request with the login or OTP category and include your account email.'),
+                ('account', 'What happens if my account is suspended?', 'A suspended account cannot browse the logged-in app. It is redirected to a suspended-account page with a Contact Admin button. Submit a support request with your username/email for review.'),
+                ('account', 'Can a deleted account be recovered?', 'Deleted accounts may not be recoverable, especially after cleanup. If deletion was accidental, submit a deleted-account support request quickly with the original email and username.'),
+                ('content', 'What are blogs for?', 'Blogs are long-form posts for tutorials, explanations, build writeups, ideas, and technical lessons. Published blogs can appear in feeds, search, profiles, and the sitemap.'),
+                ('content', 'What are projects for?', 'Projects are portfolio items with descriptions, thumbnails, links, tags, and optional gallery images. Published projects show what you have built.'),
+                ('content', 'What are Robotics projects?', 'Robotics projects are specialized project posts for robots, drones, IoT, embedded builds, ROS, Arduino, ESP32, Raspberry Pi, CAD, firmware, and hardware notes.'),
+                ('content', 'What are DevLogs?', 'DevLogs are short build-in-public updates for progress, milestones, tags, media, comments, likes, reposts, bookmarks, and daily activity.'),
+                ('content', 'How do uploads work?', 'Uploads are validated, randomly named, folder restricted, image-checked where needed, resized, and can be mirrored to Supabase Storage when configured.'),
+                ('community', 'How does following work?', 'Following helps personalize feeds and creator discovery. It also supports message permissions, notifications, and reputation signals.'),
+                ('community', 'How do messages work?', 'Messages support inbox conversations, unread counts, attachments, polling, block checks, and per-user message preferences.'),
+                ('community', 'How do notifications work?', 'Notifications are stored in the database, shown in the notification center, counted in badges, and optionally emailed based on user preferences.'),
+                ('community', 'How do reports and blocking work?', 'Users can report or block other accounts. Admins can review reports, update moderation status, and suspend accounts when needed.'),
+                ('gamification', 'What is XP?', 'XP rewards useful activity such as daily login, publishing blogs, publishing projects, receiving likes/stars, comments, follows, profile completion, and daily DevLogs.'),
+                ('gamification', 'What are reputation points?', 'Reputation points are derived from XP and help summarize trust and contribution quality on profiles, leaderboards, and reputation pages.'),
+                ('gamification', 'What are trust levels and contributor tiers?', 'Trust level and contributor tier increase as reputation grows. They help identify active, helpful, and established builders.'),
+                ('gamification', 'How do badges unlock?', 'Badges unlock automatically for milestones such as first login, completed profile, first blog, first project, DevLog activity, and higher levels.'),
+                ('gamification', 'How can I level up faster?', 'Complete your profile, publish useful content, post consistent DevLogs, share projects, comment thoughtfully, and build things other users star or like.'),
+                ('jobs', 'How does the job board work?', 'Recruiters and creators can post jobs with category, work mode, skills, salary, and company details. Applicants can apply and track status.'),
+                ('jobs', 'How do I show I am available for work?', 'Edit your profile and enable open-to-work fields, job title, work preference, experience, skills, resume link, and robotics specialties if relevant.'),
+                ('jobs', 'Where do I manage job applications?', 'Applicants can view their applications from My Applications. Recruiters can manage applicants from the job management pages.'),
+                ('security', 'How is login protected?', 'The app uses hashed passwords, email verification OTP, password reset OTP, login lockouts, remember-me controls, active device tracking, CSRF protection, and audit logs.'),
+                ('security', 'What happens when an admin suspends an account?', 'The user is marked inactive, active sessions are revoked, future logins are denied, and existing browser sessions are redirected to the suspended-account page.'),
+                ('security', 'Are public pages indexed by Google?', 'Yes. Public pages include meta descriptions, canonical tags, Open Graph tags, robots.txt, and a dynamic sitemap for blogs, projects, profiles, jobs, robotics projects, and DevLogs.'),
+                ('security', 'How are backups handled?', 'Admins can create backup archives with database dumps, uploads, logs, migrations, and instance files, then download or upload them to configured Supabase Storage.'),
+                ('support', 'Is /support for donations?', 'No. /support is now the help center for account recovery and platform support. Donations are available separately at /support/donate.'),
+                ('support', 'How do I contact admin?', 'Open the support page, choose the matching category, enter a reply email, username if known, subject, and a clear message. Admins can review requests from admin logs.'),
+                ('support', 'What information should I include for account recovery?', 'Include your username, account email, what happened, any error message, approximate last login time, and whether you still control the email address.'),
+                ('support', 'Can I donate to support the project?', 'Yes. Use /support/donate to generate a UPI QR code or open the UPI payment link on mobile. Donation intents are logged for account history and abuse prevention.')
+            ] %}
 
-            <section class="grid-2 stagger" id="faqList" style="align-items:start;">
-                {% set faqs = [
-                    ('core', 'What is AuthFlow?', 'AuthFlow is evolving into a developer ecosystem for publishing, project showcases, daily build logs, collaboration, hiring, AI workflows, launches, challenges, and professional identity.'),
-                    ('core', 'What are DevLogs?', 'DevLogs are short build-in-public updates with progress, milestones, hashtags, media, likes, comments, reposts, bookmarks, and XP. They are designed for daily activity and developer journey timelines.'),
-                    ('core', 'How do blogs and projects fit in?', 'Blogs are long-form knowledge posts. Projects are portfolio-grade shipped work. DevLogs capture the daily story between those bigger artifacts.'),
-                    ('ecosystem', 'What will the AI tools area support?', 'The AI tools area is planned for prompts, workflows, agents, automation templates, datasets, models, ratings, reviews, collections, and AI creator reputation.'),
-                    ('ecosystem', 'How will challenges work?', 'Challenges will have public briefs, countdowns, submissions, voting, leaderboards, winners, XP rewards, trophies, and history pages. Submissions are public by design.'),
-                    ('ecosystem', 'What is the developer marketplace?', 'The marketplace will support hiring, collaboration requests, startup needs, proposals, ratings, skill filters, availability, bookmarks, and messaging.'),
-                    ('ecosystem', 'What are teams?', 'Teams will provide shared profiles, branding, roles, permissions, chat, projects, blogs, files, activity feeds, invites, and analytics for collaborative builders.'),
-                    ('ecosystem', 'What is the open-source hub?', 'The open-source hub is planned for good-first issues, contributor requests, hackathon projects, issue boards, maintainers, labels, discussions, and GitHub-ready integrations.'),
-                    ('ecosystem', 'What are product launches?', 'Launches will let makers publish apps, SaaS products, AI tools, APIs, robotics projects, and open-source tools with upvotes, rankings, comments, maker profiles, media, and analytics.'),
-                    ('ecosystem', 'What are stack pages?', 'Stack pages such as Python, Flask, robotics, and AI will aggregate creators, blogs, projects, tools, discussions, challenge winners, and SEO-focused topic content.'),
-                    ('social', 'How does following work?', 'Following personalizes feeds and creates social graph context for profile discovery, message permissions, notifications, and future recommendations.'),
-                    ('social', 'How do notifications work?', 'Notifications are stored in the database, shown in the notification center, counted in badges, and optionally emailed based on user preferences.'),
-                    ('social', 'How does messaging work?', 'Messages persist in the database, support unread counts, AJAX sending, polling, block checks, and per-user message permissions.'),
-                    ('growth', 'What is XP?', 'XP rewards meaningful activity such as daily login, publishing, receiving likes or stars, comments, follows, profile completion, and daily DevLogs.'),
-                    ('growth', 'What are badges and rankings?', 'Badges, streaks, rankings, trophies, and leaderboards are planned identity layers that will build on XP, challenge wins, AI contributions, and launch performance.'),
-                    ('growth', 'How can I grow my profile?', 'Complete your profile, publish useful blogs, ship projects, post DevLogs consistently, join challenges, help other creators, and keep your work tagged clearly.'),
-                    ('security', 'How is account security handled?', 'The app uses hashed passwords, email OTP verification, password reset OTPs, login lockout, CSRF protection, secure upload validation, and moderation controls.'),
-                    ('security', 'Are uploads safe?', 'Uploads are folder-restricted, extension-checked, randomly named, image-verified where applicable, resized, and served only from allowlisted folders.'),
-                    ('security', 'How is spam reduced?', 'Sensitive actions are rate limited, CSRF-protected where session based, and moderation/reporting workflows are available for admin review.')
-                ] %}
-
+            <section class="faq-grid" id="faqList">
                 {% for category, question, answer in faqs %}
-                <article class="card-v2 faq-item hover-lift" data-category="{{ category }}" data-search="{{ (question ~ ' ' ~ answer)|lower }}" style="padding:var(--sp-4);cursor:pointer;" onclick="this.classList.toggle('expanded')">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <h3 style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);margin:0;pointer-events:none;">{{ question }}</h3>
-                        <svg class="faq-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.3s;pointer-events:none;"><polyline points="6 9 12 15 18 9"/></svg>
-                    </div>
-                    <div class="faq-answer-content" style="max-height:0;overflow:hidden;transition:max-height 0.3s ease, margin-top 0.3s ease;">
-                        <p style="margin:0;padding-top:var(--sp-3);font-size:var(--text-sm);color:var(--text-secondary);line-height:1.6;">{{ answer }}</p>
+                <article class="faq-item" data-category="{{ category }}" data-search="{{ (category ~ ' ' ~ question ~ ' ' ~ answer)|lower }}">
+                    <button class="faq-question" type="button" aria-expanded="false">
+                        <span>{{ question }}</span>
+                        <span class="faq-toggle" aria-hidden="true">+</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>{{ answer }}</p>
                     </div>
                 </article>
                 {% endfor %}
             </section>
-        </div>
+
+            <div class="faq-empty" id="faqEmpty" hidden>
+                <strong>No matching answers</strong>
+                <span>Try a different keyword or send a support request.</span>
+                <a class="btn-v2 btn-v2--secondary btn-v2--sm" href="{{ url_for('main.support') }}">Contact Support</a>
+            </div>
+        </main>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const filters = document.querySelectorAll('.faq-filters button');
-        const items = document.querySelectorAll('.faq-item');
-        const search = document.getElementById('faqSearch');
-
-        // Style overrides for active filter
-        const styleTag = document.createElement('style');
-        styleTag.innerHTML = `
-            .faq-filters button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-            .faq-item.expanded .faq-answer-content { max-height: 500px; }
-            .faq-item.expanded .faq-icon { transform: rotate(180deg); }
-        `;
-        document.head.appendChild(styleTag);
-
-        filters.forEach(btn => {
-            btn.addEventListener('click', () => {
-                filters.forEach(f => f.classList.remove('active'));
-                btn.classList.add('active');
-                filterFaqs();
-            });
-        });
-
-        if (search) {
-            search.addEventListener('input', filterFaqs);
-        }
-
-        function filterFaqs() {
-            const activeFilter = document.querySelector('.faq-filters button.active').dataset.category;
-            const query = (search ? search.value.toLowerCase() : '');
-
-            items.forEach(item => {
-                const matchesCat = activeFilter === 'all' || item.dataset.category === activeFilter;
-                const matchesSearch = item.dataset.search.includes(query);
-                if (matchesCat && matchesSearch) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        }
-    });
-</script>
+<script src="{{ url_for('static', filename='js/faq.js') }}"></script>
 {% endblock %}

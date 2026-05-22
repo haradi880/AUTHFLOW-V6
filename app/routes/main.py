@@ -7,15 +7,18 @@ import io
 import secrets
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
+from xml.sax.saxutils import escape
 
 import qrcode
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify, current_app, Response
 from flask_login import current_user, login_required, logout_user
+from sqlalchemy.exc import ProgrammingError, OperationalError
 
 from app.extensions import db
-from app.models import User, Blog, Project, Category, Tag, Notification, Bookmark, Follow, Block, Report, DevLog, RoboticsProject, Job, LoginEvent, LoginSession, DonationIntent
+from app.models import User, Blog, Project, Category, Tag, Notification, Bookmark, Follow, Block, Report, DevLog, RoboticsProject, Job, LoginEvent, LoginSession, DonationIntent, SupportTicket
 from app.services.auth import issue_otp, normalize_email, validate_password_strength, verify_otp
 from app.services.gamification import maybe_award_profile_completion
+from app.services.notifications import create_notification
 from app.services.security import revoke_all_sessions, revoke_other_sessions, revoke_session
 from app.utils.audit import AuditEventType, audit_log, get_client_ip
 from app.utils.rate_limit import rate_limit
@@ -334,10 +337,89 @@ def edit_profile():
 # ============================================================
 
 @main_bp.route('/support')
+@rate_limit(max_calls=6, window_seconds=600, scope="support-ticket")
 def support():
-    """Donation/support page with UPI QR code."""
+    """Support center with account recovery and help request form."""
+    reason = request.args.get("reason", "").strip()
+    return render_template('legal/support.html', reason=reason)
+
+
+@main_bp.post('/support')
+@rate_limit(max_calls=6, window_seconds=600, scope="support-ticket-submit")
+def submit_support_ticket():
+    email = normalize_email(request.form.get("email") or (current_user.email if current_user.is_authenticated else ""))
+    username = (request.form.get("username") or (current_user.username if current_user.is_authenticated else "")).strip()[:80]
+    category = request.form.get("category", "general")
+    if category not in {"account_recovery", "suspended", "deleted", "login", "bug", "privacy", "general"}:
+        category = "general"
+    subject = request.form.get("subject", "").strip()[:180]
+    message = request.form.get("message", "").strip()
+
+    if not email or len(subject) < 4 or len(message) < 20:
+        flash("Add a valid email, subject, and at least 20 characters explaining the issue.", "error")
+        return redirect(url_for("main.support", reason=category))
+
+    priority = "high" if category in {"account_recovery", "suspended", "deleted"} else "normal"
+    ticket = SupportTicket(
+        public_id=secrets.token_urlsafe(16),
+        user_id=current_user.id if current_user.is_authenticated else None,
+        email=email,
+        username=username,
+        category=category,
+        subject=subject,
+        message=message[:4000],
+        priority=priority,
+        ip_address=get_client_ip(),
+        user_agent=(request.headers.get("User-Agent") or "")[:500],
+    )
+    db.session.add(ticket)
+    audit_log(AuditEventType.SUPPORT_REQUEST_CREATED, description=f"Support request: {subject}", target_type="support_ticket", metadata={"category": category})
+    try:
+        db.session.commit()
+    except (ProgrammingError, OperationalError):
+        db.session.rollback()
+        current_app.logger.exception("support_tickets table is missing; run database migrations")
+        flash("Support requests are temporarily unavailable while the database is being upgraded. Please try again after deployment finishes.", "error")
+        return redirect(url_for("main.support", reason=category))
+
+    admins = User.query.filter_by(is_admin=True, active=True).all()
+    admin_link = url_for("admin.logs", event_type="support_request_created", _external=False)
+    for admin in admins:
+        create_notification(
+            user=admin,
+            action="support_ticket_admin",
+            message=f"New {category.replace('_', ' ')} support request from {email}: {subject}",
+            link=admin_link,
+            from_user=current_user if current_user.is_authenticated else None,
+            commit=False,
+            send_mail=True,
+            priority=priority,
+            entity_type="support_ticket",
+            entity_id=ticket.id,
+            email_subject=f"New support request: {subject}",
+        )
+    if current_user.is_authenticated and current_user.email:
+        create_notification(
+            user=current_user,
+            action="support_ticket_received",
+            message=f"We received your support request. Reference: {ticket.public_id}",
+            link=url_for("main.support", ticket=ticket.public_id, _external=False),
+            commit=False,
+            send_mail=False,
+            priority="normal",
+            entity_type="support_ticket",
+            entity_id=ticket.id,
+        )
+    db.session.commit()
+    flash(f"Support request received. Reference: {ticket.public_id}", "success")
+    return redirect(url_for("main.support", ticket=ticket.public_id))
+
+
+@main_bp.route('/support/donate')
+def support_donate():
+    """Donation page with UPI QR code."""
     preset_amounts = [49, 99, 199, 499, 999, 2999]
-    return render_template('legal/support.html', preset_amounts=preset_amounts)
+    return render_template('legal/support_donate.html', preset_amounts=preset_amounts)
 
 
 @main_bp.route('/faq')
@@ -349,6 +431,89 @@ def faq():
 @main_bp.get('/healthz')
 def healthz():
     return jsonify({"ok": True, "status": "healthy"})
+
+
+# ============================================================
+# SEO & Static Files (robots, sitemap)
+# ============================================================
+@main_bp.route('/robots.txt')
+def robots_txt():
+    """Serve a simple robots.txt pointing to the sitemap."""
+    sitemap_url = (current_app.config.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/') + url_for('main.sitemap')
+    lines = [
+        "User-agent: *",
+        "Disallow:",
+        f"Sitemap: {sitemap_url}"
+    ]
+    return Response("\n".join(lines), mimetype="text/plain")
+
+
+@main_bp.route('/sitemap.xml')
+def sitemap():
+    """Return a sitemap with public static and dynamic content URLs.
+
+    This is intentionally conservative — add more dynamic URLs if needed.
+    """
+    base = (current_app.config.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/')
+    paths = [
+        {'loc': url_for('main.home'), 'changefreq': 'daily', 'priority': '1.0'},
+        {'loc': url_for('blog.blogs_feed'), 'changefreq': 'daily', 'priority': '0.9'},
+        {'loc': url_for('project.projects_feed'), 'changefreq': 'daily', 'priority': '0.9'},
+        {'loc': url_for('devlogs.index'), 'changefreq': 'daily', 'priority': '0.8'},
+        {'loc': url_for('robotics.index'), 'changefreq': 'daily', 'priority': '0.8'},
+        {'loc': url_for('hiring.index'), 'changefreq': 'daily', 'priority': '0.7'},
+        {'loc': url_for('reputation.index'), 'changefreq': 'weekly', 'priority': '0.6'},
+        {'loc': url_for('main.support'), 'changefreq': 'weekly', 'priority': '0.5'},
+        {'loc': url_for('main.faq'), 'changefreq': 'monthly', 'priority': '0.5'},
+        {'loc': url_for('main.privacy'), 'changefreq': 'yearly', 'priority': '0.3'},
+        {'loc': url_for('main.terms'), 'changefreq': 'yearly', 'priority': '0.3'},
+    ]
+
+    for category in Category.query.order_by(Category.name.asc()).limit(200):
+        paths.append({'loc': url_for('blog.blogs_feed', category=category.slug), 'changefreq': 'weekly', 'priority': '0.6'})
+        paths.append({'loc': url_for('project.projects_feed', category=category.slug), 'changefreq': 'weekly', 'priority': '0.6'})
+
+    for tag in Tag.query.order_by(Tag.name.asc()).limit(300):
+        paths.append({'loc': url_for('blog.blogs_feed', tag=tag.slug), 'changefreq': 'weekly', 'priority': '0.5'})
+        paths.append({'loc': url_for('project.projects_feed', tag=tag.slug), 'changefreq': 'weekly', 'priority': '0.5'})
+        paths.append({'loc': url_for('devlogs.index', tag=tag.slug), 'changefreq': 'weekly', 'priority': '0.5'})
+
+    for blog in Blog.query.filter_by(status='published').order_by(Blog.updated_at.desc()).limit(1000):
+        paths.append({'loc': url_for('blog.blog_detail', slug=blog.slug), 'changefreq': 'weekly', 'lastmod': blog.updated_at, 'priority': '0.8'})
+
+    for project in Project.query.filter_by(status='published').order_by(Project.updated_at.desc()).limit(1000):
+        paths.append({'loc': url_for('project.project_detail', slug=project.slug), 'changefreq': 'weekly', 'lastmod': project.updated_at, 'priority': '0.8'})
+
+    for robotics_project in RoboticsProject.query.filter_by(status='published').order_by(RoboticsProject.updated_at.desc()).limit(500):
+        paths.append({'loc': url_for('robotics.project_detail', slug=robotics_project.slug), 'changefreq': 'weekly', 'lastmod': robotics_project.updated_at, 'priority': '0.7'})
+
+    for job in Job.query.filter_by(status='active').order_by(Job.updated_at.desc()).limit(500):
+        paths.append({'loc': url_for('hiring.job_detail', slug=job.slug), 'changefreq': 'daily', 'lastmod': job.updated_at, 'priority': '0.7'})
+
+    for devlog in DevLog.query.filter_by(visibility='public').order_by(DevLog.updated_at.desc()).limit(1000):
+        paths.append({'loc': url_for('devlogs.detail', devlog_id=devlog.id), 'changefreq': 'weekly', 'lastmod': devlog.updated_at, 'priority': '0.6'})
+
+    for user in User.query.filter(User.active.is_(True), User.is_verified.is_(True)).order_by(User.updated_at.desc()).limit(1000):
+        paths.append({'loc': url_for('main.public_profile', username=user.username), 'changefreq': 'weekly', 'lastmod': user.updated_at, 'priority': '0.6'})
+
+    url_elements = []
+    for item in paths:
+        loc = (base + item['loc']) if item['loc'].startswith('/') else item['loc']
+        lastmod = ''
+        if item.get('lastmod'):
+            try:
+                lastmod = f"    <lastmod>{item['lastmod'].date().isoformat()}</lastmod>\n"
+            except Exception:
+                lastmod = ''
+        url_elements.append(
+            f"  <url>\n    <loc>{escape(loc)}</loc>\n{lastmod}    <changefreq>{item.get('changefreq','weekly')}</changefreq>\n    <priority>{item.get('priority','0.5')}</priority>\n  </url>"
+        )
+
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    xml += '\n'.join(url_elements)
+    xml += '\n</urlset>'
+    return Response(xml, mimetype='application/xml')
 
 
 @main_bp.route('/api/generate-qr', methods=['POST'])

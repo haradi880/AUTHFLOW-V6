@@ -5,12 +5,15 @@ from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import User, Badge, UserBadge, Streak, LeaderboardSnapshot
+from app.services.gamification import ensure_default_badges
 
 reputation_bp = Blueprint("reputation", __name__)
 
 
 @reputation_bp.get("/reputation")
 def index():
+    ensure_default_badges()
+    db.session.commit()
     top_users = User.query.filter(User.active.is_(True)).order_by(User.xp_total.desc()).limit(20).all()
     badges = Badge.query.order_by(Badge.tier.desc(), Badge.name).all()
 

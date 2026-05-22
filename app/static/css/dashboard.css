@@ -387,6 +387,71 @@
     background: var(--bg-hover);
 }
 
+.table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.admin-backup-page {
+    max-width: 1180px;
+}
+
+.admin-backup-card {
+    padding: var(--sp-5);
+}
+
+.admin-backup-form,
+.backup-checklist {
+    display: grid;
+    gap: var(--sp-3);
+}
+
+.backup-check {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    color: var(--text-secondary);
+    background: var(--surface-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-lg);
+    line-height: 1.4;
+}
+
+.backup-check input {
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+}
+
+.backup-muted {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+}
+
+.backup-checklist div {
+    padding: var(--sp-3);
+    color: var(--text-secondary);
+    background: var(--surface-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-lg);
+}
+
+.admin-backup-table-card {
+    margin-top: var(--sp-6);
+    padding: var(--sp-5);
+}
+
+.backup-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+}
+
+.backup-actions form {
+    margin: 0;
+}
+
 
 .search-box {
     position: relative;
@@ -510,6 +575,16 @@
         padding: var(--spacing-sm);
     }
 
+    .admin-backup-card,
+    .admin-backup-table-card {
+        padding: var(--sp-4);
+    }
+
+    .backup-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
     .user-menu {
         gap: var(--spacing-sm);
     }
@@ -546,7 +621,7 @@
     left: var(--spacing-md);
     right: var(--spacing-md);
     bottom: max(var(--spacing-md), env(safe-area-inset-bottom));
-    z-index: 1080;
+    z-index: 11000;
     display: none;
     grid-template-columns: repeat(5, 1fr);
     gap: 0.25rem;

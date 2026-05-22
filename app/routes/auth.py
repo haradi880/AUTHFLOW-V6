@@ -145,6 +145,10 @@ def login():
         if error:
             log_login_attempt(email, user=user, success=False, reason=error)
             db.session.commit()
+            if user and not user.active:
+                session["suspended_account_email"] = user.email
+                session["suspended_account_username"] = user.username
+                return redirect(url_for("auth.account_suspended"))
             if user and not user.is_verified:
                 session["verify_email"] = user.email
                 flash(error, "warning")
@@ -168,11 +172,25 @@ def login():
     return render_template("auth/login.html")
 
 
+@auth_bp.get("/account/suspended")
+def account_suspended():
+    username = session.get("suspended_account_username")
+    email = session.get("suspended_account_email")
+    if current_user.is_authenticated:
+        username = current_user.username
+        email = current_user.email
+    return render_template("auth/account_status.html", status="suspended", username=username, email=email), 403
+
+
+@auth_bp.get("/account/deleted")
+def account_deleted():
+    return render_template("auth/account_status.html", status="deleted"), 410
+
+
 @auth_bp.route("/logout")
-@login_required
 def logout():
     public_id = session.get("login_session_id")
-    if public_id:
+    if current_user.is_authenticated and public_id:
         revoke_session(current_user, public_id)
     audit_log(AuditEventType.LOGOUT, description="User logged out")
     clear_login_state()
@@ -327,7 +345,7 @@ def delete_account():
             clear_login_state()
             
             flash(f"Account {username} has been permanently deleted along with all associated content.", "success")
-            return redirect(url_for("auth.login"))
+            return redirect(url_for("auth.account_deleted"))
             
         except Exception as e:
             db.session.rollback()

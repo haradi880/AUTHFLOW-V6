@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from flask_migrate import stamp as migrate_stamp
+from flask_migrate import stamp as migrate_stamp, upgrade as migrate_upgrade
 from sqlalchemy import inspect
 
 from app import create_app
@@ -46,7 +46,9 @@ def prepare_database(app):
         inspector = inspect(db.engine)
         user_tables = set(inspector.get_table_names()) - {"alembic_version"}
         if user_tables:
-            print("External database configured.")
+            print("External database configured. Applying migrations...")
+            migrate_upgrade()
+            print("External database migrations applied.")
             return
 
         print("External database is empty. Creating schema...")

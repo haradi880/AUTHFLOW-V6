@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ job.title }} - Jobs - AuthFlow{% endblock %}
+{% block meta_desc %}{{ (job.description or job.title)|striptags|truncate(155, true, '') }}{% endblock %}
+{% block canonical_url %}{{ url_for('hiring.job_detail', slug=job.slug, _external=True) }}{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/hiring.css') }}">

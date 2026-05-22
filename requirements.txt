@@ -19,5 +19,6 @@ pytest==8.2.0
 qrcode==7.4.2
 resend
 redis==5.0.8
+requests==2.31.0
 rq==1.16.2
 Flask-SocketIO==5.3.6

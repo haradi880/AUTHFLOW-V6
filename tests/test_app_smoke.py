@@ -1,3 +1,8 @@
+from io import BytesIO
+
+from PIL import Image
+from werkzeug.datastructures import FileStorage
+
 from app import create_app, db
 from app.models import (
     Blog,
@@ -26,6 +31,9 @@ from app.models import (
     TeamInvitation,
     TeamMember,
     DonationIntent,
+    SupportTicket,
+    Badge,
+    UserBadge,
 )
 from app.services.gamification import award_xp, level_from_xp, xp_progress
 
@@ -83,6 +91,48 @@ def test_cache_headers_for_dynamic_and_static_routes():
         static_response = client.get("/static/css/style.css")
         assert static_response.status_code == 200
         assert "public" in static_response.headers["Cache-Control"]
+
+
+def test_security_headers_public_routes_and_upload_traversal():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+
+    public_paths = [
+        "/healthz",
+        "/robots.txt",
+        "/sitemap.xml",
+        "/faq",
+        "/support",
+        "/support/donate",
+        "/blogs",
+        "/projects",
+        "/devlogs",
+        "/robotics",
+        "/hiring",
+        "/reputation",
+        "/search?q=demo",
+        "/api/v1/health",
+        "/api/blogs",
+        "/api/projects",
+        "/tags/suggest?q=fl",
+    ]
+    with app.test_client() as client:
+        for path in public_paths:
+            response = client.get(path)
+            assert response.status_code == 200, path
+            assert response.headers.get("X-Content-Type-Options") == "nosniff"
+            assert response.headers.get("X-Frame-Options") == "SAMEORIGIN"
+            assert "frame-ancestors 'self'" in response.headers.get("Content-Security-Policy", "")
+
+        for protected_path in ["/settings", "/messages", "/bookmarks", "/admin/", "/upload/blog", "/upload/project"]:
+            response = client.get(protected_path, follow_redirects=False)
+            assert response.status_code == 302, protected_path
+            assert "/login" in response.headers["Location"]
+
+        assert client.get("/uploads/avatars/../../.env").status_code == 404
+        assert client.get("/uploads/notallowed/file.png").status_code == 404
 
 
 def test_remember_login_sets_persistent_cookie():
@@ -327,6 +377,237 @@ def test_admin_can_moderate_reports_and_suspend_user():
         assert Report.query.get(report_id).status == "resolved"
 
 
+def test_suspended_user_gets_status_page_and_cannot_browse():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+        user = User.query.filter_by(username="demo").first()
+        user.active = False
+        db.session.commit()
+
+    with app.test_client() as client:
+        response = client.post(
+            "/login",
+            data={"email": "demo@example.com", "password": "password123"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/account/suspended")
+        response = client.get("/account/suspended")
+        assert response.status_code == 403
+        assert b"Your account is suspended" in response.data
+
+    with app.app_context():
+        user = User.query.filter_by(username="demo").first()
+        user.active = True
+        db.session.commit()
+
+    with app.test_client() as client:
+        client.post("/login", data={"email": "demo@example.com", "password": "password123"})
+        with app.app_context():
+            user = User.query.filter_by(username="demo").first()
+            user.active = False
+            db.session.commit()
+        response = client.get("/", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/account/suspended")
+        response = client.get("/support?reason=suspended", follow_redirects=False)
+        assert response.status_code == 200
+        assert b"Send a Request" in response.data
+        response = client.post(
+            "/support",
+            data={
+                "email": "demo@example.com",
+                "username": "demo",
+                "category": "suspended",
+                "subject": "Please review my suspension",
+                "message": "I am suspended and need admin help to review this account.",
+            },
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        response = client.get("/logout", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login")
+
+
+def test_account_deleted_page_renders():
+    app = create_app("testing")
+    with app.test_client() as client:
+        response = client.get("/account/deleted")
+    assert response.status_code == 410
+    assert b"Account deleted" in response.data
+
+
+def test_admin_backup_create_download_and_upload_validation(tmp_path, monkeypatch):
+    app = create_app("testing")
+    app.config.update(UPLOAD_FOLDER=str(tmp_path / "uploads"), BACKUP_KEEP_LOCAL=5)
+    with app.app_context():
+        db.create_all()
+        seed()
+        admin = User(username="admin", email="admin@example.com", is_admin=True, is_verified=True)
+        admin.set_password("password123")
+        db.session.add(admin)
+        db.session.commit()
+
+    uploaded = []
+
+    def fake_upload(path):
+        uploaded.append(path.name)
+        return True, ""
+
+    monkeypatch.setattr("app.routes.admin._upload_backup_to_supabase", fake_upload)
+
+    with app.test_client() as client:
+        client.post("/login", data={"email": "admin@example.com", "password": "password123"})
+        response = client.get("/admin/backup")
+        assert response.status_code == 200
+        assert b"New Backup" in response.data
+
+        response = client.post(
+            "/admin/backup/create",
+            data={"include_database": "on", "include_uploads": "on", "include_logs": "on", "upload_cloud": "on"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+
+        backups = list((tmp_path / "uploads" / "backups").glob("*.zip"))
+        assert len(backups) == 1
+        assert uploaded == [backups[0].name]
+
+        response = client.get(f"/admin/backup/download?name={backups[0].name}")
+        assert response.status_code == 200
+        assert "zip" in response.headers["Content-Type"]
+
+        response = client.get("/admin/backup/download?name=../platform.db", follow_redirects=False)
+        assert response.status_code == 302
+
+
+def test_admin_backup_uses_pg_dump_for_postgres(tmp_path, monkeypatch):
+    from app.routes.admin import _write_database_dump
+
+    app = create_app("testing")
+    app.config.update(SQLALCHEMY_DATABASE_URI="postgresql://user:pass@example.com:5432/appdb")
+    commands = []
+
+    def fake_run(command, check, timeout):
+        commands.append((command, check, timeout))
+        dump_file = command[-1]
+        assert dump_file.endswith("postgres_dump.sql")
+        with open(dump_file, "w", encoding="utf-8") as handle:
+            handle.write("-- dump")
+
+    monkeypatch.setattr("app.routes.admin.shutil.which", lambda name: "pg_dump" if name == "pg_dump" else None)
+    monkeypatch.setattr("app.routes.admin.subprocess.run", fake_run)
+
+    with app.app_context():
+        dump_path = _write_database_dump(tmp_path)
+
+    assert dump_path.name == "postgres_dump.sql"
+    assert dump_path.read_text(encoding="utf-8") == "-- dump"
+    assert commands[0][0][0] == "pg_dump"
+    assert commands[0][0][1].startswith("--dbname=postgresql://")
+
+
+def test_secure_upload_mirrors_to_supabase_and_serves_public_fallback(tmp_path, monkeypatch):
+    from app.utils.uploads_secure import save_upload_secure
+
+    app = create_app("testing")
+    app.config.update(
+        UPLOAD_FOLDER=str(tmp_path / "uploads"),
+        SUPABASE_URL="https://example.supabase.co",
+        SUPABASE_KEY="service-key",
+        UPLOAD_STORAGE_BUCKET="uploads",
+    )
+    uploads = []
+
+    class FakeResponse:
+        status_code = 200
+        text = "{}"
+
+    def fake_post(url, headers, data, timeout):
+        uploads.append((url, headers, data.read(), timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr("app.utils.uploads.requests.post", fake_post)
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (24, 24), color="blue").save(image_bytes, format="PNG")
+    image_bytes.seek(0)
+    upload = FileStorage(stream=image_bytes, filename="avatar.png", content_type="image/png")
+
+    with app.app_context():
+        filename, error = save_upload_secure(upload, "avatars")
+
+    assert error is None
+    assert filename.endswith("_avatar.png")
+    assert uploads
+    assert uploads[0][0].endswith(f"/storage/v1/object/uploads/avatars/{filename}")
+    assert uploads[0][1]["x-upsert"] == "true"
+
+    with app.test_client() as client:
+        response = client.get(f"/uploads/avatars/{filename}", follow_redirects=False)
+        assert response.status_code == 200
+        response.close()
+        local_file = tmp_path / "uploads" / "avatars" / filename
+        local_file.unlink()
+        response = client.get(f"/uploads/avatars/{filename}", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith(f"/storage/v1/object/public/uploads/avatars/{filename}")
+
+
+def test_sitemap_includes_dynamic_public_content():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+        user = User.query.filter_by(username="demo").first()
+        tag = Tag(name="Robotics", slug="robotics")
+        blog = Blog.query.filter_by(slug="hello").first()
+        project = Project.query.filter_by(slug="project").first()
+        blog.tags.append(tag)
+        project.tags.append(tag)
+        company = Company(name="Acme Robotics", slug="acme-robotics", created_by=user)
+        db.session.add(company)
+        db.session.flush()
+        db.session.add_all([
+            DevLog(content="Public build log", visibility="public", user_id=user.id),
+            RoboticsProject(
+                title="Line Follower",
+                slug="line-follower",
+                description="Robot build",
+                project_type="esp32",
+                status="published",
+                user_id=user.id,
+            ),
+            Job(
+                title="Robot Engineer",
+                slug="robot-engineer",
+                description="Build robots",
+                job_type="contract",
+                work_mode="remote",
+                category="robotics",
+                company_id=company.id,
+                posted_by_id=user.id,
+            ),
+        ])
+        db.session.commit()
+
+    with app.test_client() as client:
+        response = client.get("/sitemap.xml")
+
+    assert response.status_code == 200
+    xml = response.data.decode()
+    assert "https://haradibots.onrender.com/blog/hello" in xml
+    assert "https://haradibots.onrender.com/project/project" in xml
+    assert "https://haradibots.onrender.com/robotics/line-follower" in xml
+    assert "https://haradibots.onrender.com/hiring/robot-engineer" in xml
+    assert "https://haradibots.onrender.com/devlogs/" in xml
+    assert "https://haradibots.onrender.com/demo" in xml
+    assert "tag=robotics" in xml
+
+
 def test_xp_awards_are_progressive_and_abuse_limited():
     app = create_app("testing")
     with app.app_context():
@@ -342,6 +623,9 @@ def test_xp_awards_are_progressive_and_abuse_limited():
         assert second is None
         assert XPTransaction.query.filter_by(user_id=user.id, action="daily_login").count() == 1
         assert user.xp_total == 10
+        assert user.reputation_points == 6
+        assert Badge.query.filter_by(slug="first-login").first() is not None
+        assert UserBadge.query.filter_by(user_id=user.id).count() == 1
 
 
 def test_publishing_and_project_stars_award_xp():
@@ -610,6 +894,81 @@ def test_support_upi_qr_generation_logs_donation_intent():
         intent = DonationIntent.query.first()
         assert intent is not None
         assert str(intent.amount) == "99.00"
+
+
+def test_support_ticket_submission_and_admin_status_update():
+    app = create_app("testing")
+    with app.app_context():
+        db.create_all()
+        seed()
+        admin = User(username="admin", email="admin@example.com", is_admin=True, is_verified=True)
+        admin.set_password("password123")
+        db.session.add(admin)
+        db.session.commit()
+
+    with app.test_client() as client:
+        response = client.get("/support?reason=suspended")
+        assert response.status_code == 200
+        assert b"Account recovery" in response.data
+        response = client.post(
+            "/support",
+            data={
+                "email": "demo@example.com",
+                "username": "demo",
+                "category": "suspended",
+                "subject": "Please review my account",
+                "message": "My account says suspended and I need admin review for recovery.",
+            },
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+
+    with app.app_context():
+        ticket = SupportTicket.query.filter_by(email="demo@example.com").first()
+        assert ticket is not None
+        assert ticket.priority == "high"
+        ticket_id = ticket.id
+        admin = User.query.filter_by(username="admin").first()
+        admin_notification = Notification.query.filter_by(
+            user_id=admin.id,
+            action="support_ticket_admin",
+            entity_type="support_ticket",
+            entity_id=ticket_id,
+        ).first()
+        assert admin_notification is not None
+        assert "support request" in admin_notification.message.lower()
+
+    with app.test_client() as client:
+        client.post("/login", data={"email": "admin@example.com", "password": "password123"})
+        response = client.get("/admin/logs")
+        assert response.status_code == 200
+        assert b"Support Requests" in response.data
+        response = client.post(
+            f"/admin/support-tickets/{ticket_id}/status",
+            data={"status": "resolved", "admin_note": "Restored manually."},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+
+    with app.app_context():
+        ticket = db.session.get(SupportTicket, ticket_id)
+        assert ticket.status == "resolved"
+        assert ticket.admin_note == "Restored manually."
+        assert ticket.resolved_at is not None
+
+
+def test_faq_help_center_has_account_support_and_gamification_answers():
+    app = create_app("testing")
+    with app.test_client() as client:
+        response = client.get("/faq")
+    assert response.status_code == 200
+    html = response.data.decode()
+    assert "Account recovery" in html
+    assert "Suspended account" in html
+    assert "What is XP?" in html
+    assert "Donations are available separately" in html
+    assert "faqSearch" in html
+    assert "faqEmpty" in html
 
 
 def test_devlog_comment_and_devlog_delete():
