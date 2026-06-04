@@ -1,8 +1,10 @@
 """Admin Routes - Admin dashboard, moderation, backups, and user management."""
 
+import hashlib
+import json
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 import time
 import zipfile
@@ -12,6 +14,7 @@ from pathlib import Path
 import requests
 from flask import Blueprint, render_template, flash, redirect, request, url_for, current_app, send_file
 from flask_login import current_user
+from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError, OperationalError
 from werkzeug.utils import secure_filename
 
@@ -58,7 +61,7 @@ def admin_dashboard():
 @admin_bp.post('/users/<int:user_id>/toggle-active')
 @admin_required
 def toggle_user_active(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     if user.is_admin:
         flash('Admin accounts cannot be suspended from this panel.', 'error')
         return redirect(url_for('admin.admin_dashboard'))
@@ -82,7 +85,7 @@ def toggle_user_active(user_id):
 @admin_bp.post('/reports/<int:report_id>/status')
 @admin_required
 def update_report_status(report_id):
-    report = Report.query.get_or_404(report_id)
+    report = db.get_or_404(Report, report_id)
     status = request.form.get('status')
     if status not in {'open', 'reviewing', 'resolved', 'dismissed'}:
         flash('Invalid report status.', 'error')
@@ -96,7 +99,7 @@ def update_report_status(report_id):
 @admin_bp.post('/content/blogs/<int:blog_id>/status')
 @admin_required
 def update_blog_status(blog_id):
-    blog = Blog.query.get_or_404(blog_id)
+    blog = db.get_or_404(Blog, blog_id)
     status = request.form.get('status')
     if status not in {'draft', 'published'}:
         flash('Invalid blog status.', 'error')
@@ -110,7 +113,7 @@ def update_blog_status(blog_id):
 @admin_bp.post('/content/projects/<int:project_id>/status')
 @admin_required
 def update_project_status(project_id):
-    project = Project.query.get_or_404(project_id)
+    project = db.get_or_404(Project, project_id)
     status = request.form.get('status')
     if status not in {'draft', 'published'}:
         flash('Invalid project status.', 'error')
@@ -159,7 +162,7 @@ def logs():
 @admin_bp.post('/support-tickets/<int:ticket_id>/status')
 @admin_required
 def update_support_ticket_status(ticket_id):
-    ticket = SupportTicket.query.get_or_404(ticket_id)
+    ticket = db.get_or_404(SupportTicket, ticket_id)
     status = request.form.get('status')
     if status not in {'open', 'reviewing', 'waiting-user', 'resolved', 'closed'}:
         flash('Invalid support ticket status.', 'error')
@@ -240,34 +243,154 @@ def _write_database_dump(temp_dir):
             current_app.logger.warning('pg_dump is not available; database dump skipped')
             return None
         dump_file = db_dir / 'postgres_dump.sql'
-        subprocess.run([pg_dump, '--dbname=' + db_uri, '-f', str(dump_file)], check=True, timeout=120)
+        subprocess.run([pg_dump, '--dbname=' + db_uri, '-f', str(dump_file)], check=True, timeout=120)  # nosec B603
         return dump_file
 
     return None
 
 
-def _add_path_to_zip(zf, path, project_root, backup_dir, exclude_self):
+DATABASE_ARTIFACT_SUFFIXES = {'.db', '.sqlite', '.sqlite3', '.sql', '.dump'}
+GENERATED_BACKUP_DIR_NAMES = {'__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'}
+GENERATED_BACKUP_SUFFIXES = {'.pyc', '.pyo'}
+
+
+def _is_database_artifact(path):
+    return Path(path).suffix.lower() in DATABASE_ARTIFACT_SUFFIXES
+
+
+def _is_generated_artifact(path):
+    candidate = Path(path)
+    return candidate.name in GENERATED_BACKUP_DIR_NAMES or candidate.suffix.lower() in GENERATED_BACKUP_SUFFIXES
+
+
+def _iter_backup_files(path, project_root, backup_dir, exclude_self=None, exclude_database_artifacts=False):
     path = Path(path).resolve()
     if not path.exists():
         return
     if path.is_file():
         if exclude_self and path == exclude_self:
             return
-        zf.write(path, path.relative_to(project_root).as_posix() if path.is_relative_to(project_root) else path.name)
+        if _is_generated_artifact(path):
+            return
+        if exclude_database_artifacts and _is_database_artifact(path):
+            return
+        arcname = path.relative_to(project_root).as_posix() if path.is_relative_to(project_root) else path.name
+        yield path, arcname
         return
 
     for root, dirs, files in os.walk(path):
         root_path = Path(root).resolve()
-        dirs[:] = [name for name in dirs if (root_path / name).resolve() != backup_dir]
+        dirs[:] = [
+            name
+            for name in dirs
+            if (root_path / name).resolve() != backup_dir and not _is_generated_artifact(root_path / name)
+        ]
         for filename in files:
             full = (root_path / filename).resolve()
             if exclude_self and full == exclude_self:
+                continue
+            if _is_generated_artifact(full):
+                continue
+            if exclude_database_artifacts and _is_database_artifact(full):
                 continue
             try:
                 arcname = full.relative_to(project_root).as_posix()
             except ValueError:
                 arcname = full.name
-            zf.write(full, arcname)
+            yield full, arcname
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _current_alembic_revision():
+    try:
+        return db.session.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    except Exception:
+        db.session.rollback()
+        return None
+
+
+def _build_backup_manifest(files, include_database, include_uploads, include_logs):
+    entries = []
+    total_size = 0
+    for file_path, arcname in sorted(files, key=lambda item: item[1]):
+        size = file_path.stat().st_size
+        total_size += size
+        entries.append({
+            "path": arcname,
+            "size": size,
+            "sha256": _sha256_file(file_path),
+        })
+
+    has_database_dump = any(entry["path"].startswith("database/") for entry in entries)
+    return {
+        "schema_version": 1,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "app_name": current_app.config.get('APP_NAME', 'HaradiBots'),
+        "app_env": current_app.config.get('APP_ENV'),
+        "alembic_revision": _current_alembic_revision(),
+        "database": {
+            "requested": bool(include_database),
+            "dump_present": has_database_dump,
+            "uri_scheme": (current_app.config.get('SQLALCHEMY_DATABASE_URI') or '').split(':', 1)[0],
+        },
+        "includes": {
+            "database": bool(include_database),
+            "uploads": bool(include_uploads),
+            "logs": bool(include_logs),
+            "instance": True,
+            "migrations": True,
+        },
+        "file_count": len(entries),
+        "total_size": total_size,
+        "entries": entries,
+    }
+
+
+def _verify_backup_zip(path):
+    path = Path(path)
+    result = {"ok": False, "errors": [], "warnings": [], "manifest": None}
+    if not path.is_file() or not zipfile.is_zipfile(path):
+        result["errors"].append("Backup is not a readable zip archive.")
+        return result
+
+    with zipfile.ZipFile(path, 'r') as zf:
+        if zf.testzip():
+            result["errors"].append("Zip integrity check failed.")
+        names = set(zf.namelist())
+        if "backup_manifest.json" not in names:
+            result["errors"].append("backup_manifest.json is missing.")
+            return result
+        try:
+            manifest = json.loads(zf.read("backup_manifest.json").decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            result["errors"].append(f"backup_manifest.json is invalid: {exc}")
+            return result
+        result["manifest"] = manifest
+
+        for entry in manifest.get("entries", []):
+            entry_path = entry.get("path")
+            if not entry_path or entry_path not in names:
+                result["errors"].append(f"Missing backup entry: {entry_path}")
+                continue
+            data = zf.read(entry_path)
+            if len(data) != int(entry.get("size") or -1):
+                result["errors"].append(f"Size mismatch: {entry_path}")
+            expected_hash = entry.get("sha256")
+            if expected_hash and hashlib.sha256(data).hexdigest() != expected_hash:
+                result["errors"].append(f"Checksum mismatch: {entry_path}")
+
+        if manifest.get("database", {}).get("requested") and not manifest.get("database", {}).get("dump_present"):
+            result["warnings"].append("Database backup was requested but no database dump is present.")
+
+    result["ok"] = not result["errors"]
+    return result
 
 
 def _create_backup_zip(include_database=True, include_uploads=True, include_logs=True):
@@ -296,22 +419,45 @@ def _create_backup_zip(include_database=True, include_uploads=True, include_logs
             if enabled:
                 included.append(project_root / folder_name)
 
-        manifest = Path(temp_dir) / 'backup_manifest.txt'
-        manifest.write_text(
+        files = []
+        for item in included:
+            files.extend(
+                _iter_backup_files(
+                    item,
+                    project_root,
+                    backup_dir,
+                    out_path,
+                    exclude_database_artifacts=not include_database,
+                )
+            )
+
+        manifest_data = _build_backup_manifest(files, include_database, include_uploads, include_logs)
+        manifest_json = Path(temp_dir) / 'backup_manifest.json'
+        manifest_json.write_text(json.dumps(manifest_data, indent=2, sort_keys=True), encoding='utf-8')
+        manifest_txt = Path(temp_dir) / 'backup_manifest.txt'
+        manifest_txt.write_text(
             '\n'.join([
-                f"created_at={datetime.utcnow().isoformat()}Z",
-                f"app_name={current_app.config.get('APP_NAME', 'AUTHFLOW')}",
-                f"database_included={bool(include_database)}",
+                f"created_at={manifest_data['created_at']}",
+                f"app_name={manifest_data['app_name']}",
+                f"app_env={manifest_data.get('app_env') or ''}",
+                f"alembic_revision={manifest_data.get('alembic_revision') or ''}",
+                f"database_requested={manifest_data['database']['requested']}",
+                f"database_dump_present={manifest_data['database']['dump_present']}",
                 f"uploads_included={bool(include_uploads)}",
                 f"logs_included={bool(include_logs)}",
+                f"file_count={manifest_data['file_count']}",
+                f"total_size={manifest_data['total_size']}",
             ]),
             encoding='utf-8',
         )
-        included.append(manifest)
+        files.extend([
+            (manifest_json, 'backup_manifest.json'),
+            (manifest_txt, 'backup_manifest.txt'),
+        ])
 
         with zipfile.ZipFile(out_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-            for item in included:
-                _add_path_to_zip(zf, item, project_root, backup_dir, out_path)
+            for file_path, arcname in files:
+                zf.write(file_path, arcname)
         _prune_old_backups()
         return out_path
     finally:

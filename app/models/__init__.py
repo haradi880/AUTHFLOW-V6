@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta
 
 from flask import url_for
@@ -5,6 +6,14 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
+
+
+def _public_upload_url(folder, filename):
+    if not filename:
+        return ""
+    from app.utils.uploads import public_upload_url
+
+    return public_upload_url(folder, filename)
 
 
 blog_tags = db.Table(
@@ -201,11 +210,11 @@ class User(UserMixin, TimestampMixin, db.Model):
 
     @property
     def avatar_url(self):
-        return url_for("uploaded_file", folder="avatars", filename=self.avatar) if self.avatar else ""
+        return _public_upload_url("avatars", self.avatar) if self.avatar and self.avatar != "default.jpg" else ""
 
     @property
     def banner_url(self):
-        return url_for("uploaded_file", folder="banners", filename=self.banner) if self.banner else ""
+        return _public_upload_url("banners", self.banner) if self.banner and self.banner != "default_banner.jpg" else ""
 
     @property
     def social(self):
@@ -306,7 +315,7 @@ class Blog(TimestampMixin, db.Model):
 
     @property
     def thumbnail_url(self):
-        return url_for("uploaded_file", folder="blogs", filename=self.thumbnail) if self.thumbnail else ""
+        return _public_upload_url("blogs", self.thumbnail)
 
     @property
     def author_bio(self):
@@ -364,7 +373,7 @@ class Project(TimestampMixin, db.Model):
 
     @property
     def thumbnail_url(self):
-        return url_for("uploaded_file", folder="projects", filename=self.thumbnail) if self.thumbnail else ""
+        return _public_upload_url("projects", self.thumbnail)
 
     @property
     def tech_stack(self):
@@ -404,7 +413,7 @@ class ProjectImage(db.Model):
 
     @property
     def url(self):
-        return url_for("uploaded_file", folder="projects", filename=self.filename)
+        return _public_upload_url("projects", self.filename)
 
 
 class DevLog(TimestampMixin, db.Model):
@@ -471,7 +480,7 @@ class DevLogMedia(db.Model):
 
     @property
     def url(self):
-        return url_for("uploaded_file", folder="devlogs", filename=self.filename)
+        return _public_upload_url("devlogs", self.filename)
 
 
 class DevLogComment(TimestampMixin, db.Model):
@@ -688,22 +697,107 @@ class LoginEvent(db.Model):
     )
 
 
+class Conversation(TimestampMixin, db.Model):
+    __tablename__ = "conversations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(40), default=lambda: secrets.token_urlsafe(18), unique=True, nullable=False, index=True)
+    type = db.Column(db.String(20), default="direct", nullable=False, index=True)
+    title = db.Column(db.String(160))
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    last_message_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+    members = db.relationship("ConversationMember", back_populates="conversation", lazy="dynamic", cascade="all, delete-orphan")
+    messages = db.relationship("Message", back_populates="conversation", lazy="dynamic", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        db.Index("ix_conversations_type_updated", "type", "updated_at"),
+        db.CheckConstraint("type IN ('direct', 'group')", name="ck_conversations_type"),
+    )
+
+    def member_for(self, user):
+        if not user or not getattr(user, "is_authenticated", False):
+            return None
+        return ConversationMember.query.filter_by(conversation_id=self.id, user_id=user.id, is_active=True).first()
+
+    def can_view(self, user):
+        return bool(getattr(user, "is_admin", False) or self.member_for(user))
+
+    def can_manage(self, user):
+        member = self.member_for(user)
+        return bool(getattr(user, "is_admin", False) or (member and member.role in {"owner", "admin"}))
+
+    def display_title_for(self, user):
+        if self.type == "group":
+            return self.title or "Group conversation"
+        other = (
+            self.members.join(User, ConversationMember.user_id == User.id)
+            .filter(ConversationMember.user_id != getattr(user, "id", None), ConversationMember.is_active.is_(True))
+            .with_entities(User.full_name, User.username)
+            .first()
+        )
+        if not other:
+            return "Direct message"
+        return other.full_name or f"@{other.username}"
+
+
+class ConversationMember(db.Model):
+    __tablename__ = "conversation_members"
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = db.Column(db.String(20), default="member", nullable=False, index=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    left_at = db.Column(db.DateTime)
+    last_read_message_id = db.Column(db.Integer, db.ForeignKey("messages.id", ondelete="SET NULL"), index=True)
+    last_read_at = db.Column(db.DateTime)
+
+    conversation = db.relationship("Conversation", back_populates="members", foreign_keys=[conversation_id])
+    user = db.relationship("User", foreign_keys=[user_id], backref=db.backref("conversation_memberships", lazy="dynamic", cascade="all, delete-orphan"))
+    last_read_message = db.relationship("Message", foreign_keys=[last_read_message_id], post_update=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("conversation_id", "user_id", name="uq_conversation_member"),
+        db.Index("ix_conversation_members_user_active", "user_id", "is_active"),
+        db.Index("ix_conversation_members_conversation_role", "conversation_id", "role"),
+        db.CheckConstraint("role IN ('owner', 'admin', 'member')", name="ck_conversation_member_role"),
+    )
+
+
 class Message(db.Model):
     __tablename__ = "messages"
 
     id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
     sender_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    recipient_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    recipient_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    client_id = db.Column(db.String(80), index=True)
     content = db.Column(db.Text, nullable=False)
     attachment_filename = db.Column(db.String(255))
     attachment_original_name = db.Column(db.String(255))
     attachment_mime = db.Column(db.String(120))
     attachment_size = db.Column(db.Integer)
+    status = db.Column(db.String(20), default="sent", nullable=False, index=True)
     is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    delivered_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    read_at = db.Column(db.DateTime, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
+    conversation = db.relationship("Conversation", back_populates="messages", foreign_keys=[conversation_id])
     sender = db.relationship("User", foreign_keys=[sender_id], backref=db.backref("sent_messages", lazy="dynamic"))
     recipient = db.relationship("User", foreign_keys=[recipient_id], backref=db.backref("received_messages", lazy="dynamic"))
+    receipts = db.relationship("MessageReceipt", back_populates="message", lazy="dynamic", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        db.Index("ix_messages_conversation_created", "conversation_id", "created_at"),
+        db.Index("ix_messages_conversation_id_id", "conversation_id", "id"),
+        db.Index("ix_messages_recipient_read_created", "recipient_id", "is_read", "created_at"),
+        db.Index("ix_messages_sender_client", "sender_id", "client_id"),
+        db.CheckConstraint("status IN ('sending', 'sent', 'delivered', 'read', 'failed')", name="ck_messages_status"),
+    )
 
     @property
     def has_attachment(self):
@@ -712,6 +806,35 @@ class Message(db.Model):
     @property
     def attachment_is_image(self):
         return bool((self.attachment_mime or "").startswith("image/"))
+
+    def display_status_for(self, user):
+        if self.sender_id != getattr(user, "id", None):
+            return "received"
+        if self.read_at or self.is_read:
+            return "read"
+        if self.delivered_at:
+            return "delivered"
+        return self.status or "sent"
+
+
+class MessageReceipt(db.Model):
+    __tablename__ = "message_receipts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = db.Column(db.String(20), default="delivered", nullable=False, index=True)
+    delivered_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    read_at = db.Column(db.DateTime, index=True)
+
+    message = db.relationship("Message", back_populates="receipts")
+    user = db.relationship("User", backref=db.backref("message_receipts", lazy="dynamic", cascade="all, delete-orphan"))
+
+    __table_args__ = (
+        db.UniqueConstraint("message_id", "user_id", name="uq_message_receipt_user"),
+        db.Index("ix_message_receipts_user_status", "user_id", "status"),
+        db.CheckConstraint("status IN ('sent', 'delivered', 'read')", name="ck_message_receipt_status"),
+    )
 
 
 # =====================================================
@@ -1127,7 +1250,7 @@ class RoboticsProject(TimestampMixin, db.Model):
 
     @property
     def thumbnail_url(self):
-        return url_for("uploaded_file", folder="projects", filename=self.thumbnail) if self.thumbnail else ""
+        return _public_upload_url("projects", self.thumbnail)
 
 
 class RoboticsFile(db.Model):
@@ -1240,3 +1363,9 @@ class DeletedContent(db.Model):
     
     deleted_by = db.relationship("User", foreign_keys=[deleted_by_id], backref=db.backref("deleted_content", lazy="dynamic"))
     recovered_by = db.relationship("User", foreign_keys=[recovered_by_id])
+
+    def __repr__(self):
+        return f"<DeletedContent {self.content_type}:{self.content_id} at {self.deleted_at}>"
+
+    def can_recover(self) -> bool:
+        return not self.recovered and bool(self.expires_at and self.expires_at > datetime.utcnow())

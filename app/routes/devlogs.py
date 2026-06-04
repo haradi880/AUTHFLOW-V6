@@ -161,7 +161,7 @@ def detail(devlog_id):
 @devlog_bp.post("/devlogs/<int:devlog_id>/like")
 @login_required
 def like(devlog_id):
-    devlog = DevLog.query.get_or_404(devlog_id)
+    devlog = db.get_or_404(DevLog, devlog_id)
     existing = DevLogLike.query.filter_by(user_id=current_user.id, devlog_id=devlog.id).first()
     if existing:
         db.session.delete(existing)
@@ -187,7 +187,7 @@ def like(devlog_id):
 @devlog_bp.post("/devlogs/<int:devlog_id>/bookmark")
 @login_required
 def bookmark(devlog_id):
-    devlog = DevLog.query.get_or_404(devlog_id)
+    devlog = db.get_or_404(DevLog, devlog_id)
     existing = DevLogBookmark.query.filter_by(user_id=current_user.id, devlog_id=devlog.id).first()
     if existing:
         db.session.delete(existing)
@@ -204,7 +204,7 @@ def bookmark(devlog_id):
 @devlog_bp.post("/devlogs/<int:devlog_id>/repost")
 @login_required
 def repost(devlog_id):
-    devlog = DevLog.query.get_or_404(devlog_id)
+    devlog = db.get_or_404(DevLog, devlog_id)
     if devlog.user_id == current_user.id:
         return jsonify({"error": "You cannot repost your own DevLog."}), 400
 
@@ -232,7 +232,7 @@ def repost(devlog_id):
 @login_required
 @rate_limit(max_calls=20, window_seconds=300, scope="devlog-comments")
 def comment(devlog_id):
-    devlog = DevLog.query.get_or_404(devlog_id)
+    devlog = db.get_or_404(DevLog, devlog_id)
     content = request.form.get("content", "").strip()
     if not content:
         return jsonify({"error": "Comment cannot be empty."}), 400
@@ -259,7 +259,7 @@ def comment(devlog_id):
 @devlog_bp.post("/devlogs/comments/<int:comment_id>/delete")
 @login_required
 def delete_comment(comment_id):
-    comment_row = DevLogComment.query.get_or_404(comment_id)
+    comment_row = db.get_or_404(DevLogComment, comment_id)
     devlog = comment_row.devlog
     if comment_row.user_id != current_user.id and devlog.user_id != current_user.id and not current_user.is_admin:
         return jsonify({"error": "You can only delete your own comments or comments on your DevLog."}), 403
@@ -273,7 +273,7 @@ def delete_comment(comment_id):
 @devlog_bp.post("/devlogs/<int:devlog_id>/pin")
 @login_required
 def pin(devlog_id):
-    devlog = DevLog.query.get_or_404(devlog_id)
+    devlog = db.get_or_404(DevLog, devlog_id)
     if devlog.user_id != current_user.id and not current_user.is_admin:
         return jsonify({"error": "You can only pin your own DevLogs."}), 403
     devlog.is_pinned = not devlog.is_pinned
@@ -284,7 +284,7 @@ def pin(devlog_id):
 @devlog_bp.post("/devlogs/<int:devlog_id>/delete")
 @login_required
 def delete_devlog(devlog_id):
-    devlog = DevLog.query.get_or_404(devlog_id)
+    devlog = db.get_or_404(DevLog, devlog_id)
     if devlog.user_id != current_user.id and not current_user.is_admin:
         return jsonify({"error": "You can only delete your own DevLogs."}), 403
 
@@ -302,7 +302,7 @@ def delete_devlog(devlog_id):
 @devlog_bp.post("/devlogs/media/<int:media_id>/delete")
 @login_required
 def delete_media(media_id):
-    media = DevLogMedia.query.get_or_404(media_id)
+    media = db.get_or_404(DevLogMedia, media_id)
     if media.devlog.user_id != current_user.id and not current_user.is_admin:
         return jsonify({"error": "You can only remove media from your own DevLogs."}), 403
     delete_file(media.filename, "devlogs")

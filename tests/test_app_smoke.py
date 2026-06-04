@@ -1,3 +1,5 @@
+import json
+import zipfile
 from io import BytesIO
 
 from PIL import Image
@@ -124,7 +126,16 @@ def test_security_headers_public_routes_and_upload_traversal():
             assert response.status_code == 200, path
             assert response.headers.get("X-Content-Type-Options") == "nosniff"
             assert response.headers.get("X-Frame-Options") == "SAMEORIGIN"
-            assert "frame-ancestors 'self'" in response.headers.get("Content-Security-Policy", "")
+            assert response.headers.get("X-Permitted-Cross-Domain-Policies") == "none"
+            assert response.headers.get("X-Download-Options") == "noopen"
+            assert response.headers.get("Cross-Origin-Opener-Policy") == "same-origin"
+            csp = response.headers.get("Content-Security-Policy", "")
+            assert "unsafe-eval" not in csp
+            assert "object-src 'none'" in csp
+            assert "form-action 'self'" in csp
+            assert "frame-ancestors 'self'" in csp
+            assert "https://cdn.jsdelivr.net" in csp
+            assert "media-src 'self' https://assets.mixkit.co" in csp
 
         for protected_path in ["/settings", "/messages", "/bookmarks", "/admin/", "/upload/blog", "/upload/project"]:
             response = client.get(protected_path, follow_redirects=False)
@@ -313,7 +324,7 @@ def test_devlogs_feed_create_and_ajax_interactions():
         assert "devlog-card" in response.get_json()["html"]
 
     with app.app_context():
-        devlog = DevLog.query.get(devlog_id)
+        devlog = db.session.get(DevLog, devlog_id)
         fan = User.query.filter_by(username="fan").first()
         assert devlog.likes_count == 1
         assert devlog.bookmarks_count == 1
@@ -373,8 +384,8 @@ def test_admin_can_moderate_reports_and_suspend_user():
         assert response.status_code == 302
 
     with app.app_context():
-        assert User.query.get(demo_id).active is False
-        assert Report.query.get(report_id).status == "resolved"
+        assert db.session.get(User, demo_id).active is False
+        assert db.session.get(Report, report_id).status == "resolved"
 
 
 def test_suspended_user_gets_status_page_and_cannot_browse():
@@ -441,6 +452,8 @@ def test_account_deleted_page_renders():
 
 
 def test_admin_backup_create_download_and_upload_validation(tmp_path, monkeypatch):
+    from app.routes.admin import _verify_backup_zip
+
     app = create_app("testing")
     app.config.update(UPLOAD_FOLDER=str(tmp_path / "uploads"), BACKUP_KEEP_LOCAL=5)
     with app.app_context():
@@ -461,6 +474,9 @@ def test_admin_backup_create_download_and_upload_validation(tmp_path, monkeypatc
 
     with app.test_client() as client:
         client.post("/login", data={"email": "admin@example.com", "password": "password123"})
+        cache_file = tmp_path / "uploads" / "__pycache__" / "stale.cpython-310.pyc"
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_bytes(b"compiled-cache")
         response = client.get("/admin/backup")
         assert response.status_code == 200
         assert b"New Backup" in response.data
@@ -475,6 +491,41 @@ def test_admin_backup_create_download_and_upload_validation(tmp_path, monkeypatc
         backups = list((tmp_path / "uploads" / "backups").glob("*.zip"))
         assert len(backups) == 1
         assert uploaded == [backups[0].name]
+        verification = _verify_backup_zip(backups[0])
+        assert verification["ok"] is True
+        assert not verification["errors"]
+        assert verification["manifest"]["includes"]["database"] is True
+        assert verification["manifest"]["includes"]["uploads"] is True
+        with zipfile.ZipFile(backups[0]) as zf:
+            assert "backup_manifest.json" in zf.namelist()
+            manifest = json.loads(zf.read("backup_manifest.json").decode("utf-8"))
+            assert manifest["schema_version"] == 1
+            assert manifest["file_count"] >= 1
+            names = zf.namelist()
+            assert not any("__pycache__" in name or name.endswith((".pyc", ".pyo")) for name in names)
+        cli_result = app.test_cli_runner().invoke(args=["backup-verify", "--path", str(backups[0])])
+        assert cli_result.exit_code == 0
+        assert "Status: ok" in cli_result.output
+
+        drill_result = app.test_cli_runner().invoke(
+            args=["backup-drill", "--skip-database", "--skip-logs", "--json"]
+        )
+        assert drill_result.exit_code == 0
+        assert '"ok": true' in drill_result.output
+        assert '"database_dump_present": false' in drill_result.output
+        drill_payload = json.loads(drill_result.output)
+        drill_entries = drill_payload["verification"]["manifest"]["entries"]
+        assert not any(entry["path"].endswith((".db", ".sqlite", ".sqlite3", ".sql", ".dump")) for entry in drill_entries)
+        assert not any("__pycache__" in entry["path"] or entry["path"].endswith((".pyc", ".pyo")) for entry in drill_entries)
+        assert len(list((tmp_path / "uploads" / "backups").glob("*.zip"))) >= 1
+
+        uploaded.clear()
+        cloud_drill_result = app.test_cli_runner().invoke(
+            args=["backup-drill", "--skip-database", "--skip-logs", "--upload-cloud", "--json"]
+        )
+        assert cloud_drill_result.exit_code == 0
+        assert '"uploaded": true' in cloud_drill_result.output
+        assert uploaded
 
         response = client.get(f"/admin/backup/download?name={backups[0].name}")
         assert response.status_code == 200
@@ -510,7 +561,7 @@ def test_admin_backup_uses_pg_dump_for_postgres(tmp_path, monkeypatch):
     assert commands[0][0][1].startswith("--dbname=postgresql://")
 
 
-def test_secure_upload_mirrors_to_supabase_and_serves_public_fallback(tmp_path, monkeypatch):
+def test_secure_upload_uses_supabase_and_discards_local_temp(tmp_path, monkeypatch):
     from app.utils.uploads_secure import save_upload_secure
 
     app = create_app("testing")
@@ -535,7 +586,7 @@ def test_secure_upload_mirrors_to_supabase_and_serves_public_fallback(tmp_path, 
     image_bytes = BytesIO()
     Image.new("RGB", (24, 24), color="blue").save(image_bytes, format="PNG")
     image_bytes.seek(0)
-    upload = FileStorage(stream=image_bytes, filename="avatar.png", content_type="image/png")
+    upload = FileStorage(stream=image_bytes, filename="avatar.png", content_type="text/html")
 
     with app.app_context():
         filename, error = save_upload_secure(upload, "avatars")
@@ -545,13 +596,11 @@ def test_secure_upload_mirrors_to_supabase_and_serves_public_fallback(tmp_path, 
     assert uploads
     assert uploads[0][0].endswith(f"/storage/v1/object/uploads/avatars/{filename}")
     assert uploads[0][1]["x-upsert"] == "true"
+    assert uploads[0][1]["content-type"] == "image/png"
+    local_file = tmp_path / "uploads" / "avatars" / filename
+    assert not local_file.exists()
 
     with app.test_client() as client:
-        response = client.get(f"/uploads/avatars/{filename}", follow_redirects=False)
-        assert response.status_code == 200
-        response.close()
-        local_file = tmp_path / "uploads" / "avatars" / filename
-        local_file.unlink()
         response = client.get(f"/uploads/avatars/{filename}", follow_redirects=False)
         assert response.status_code == 302
         assert response.headers["Location"].endswith(f"/storage/v1/object/public/uploads/avatars/{filename}")
@@ -687,7 +736,7 @@ def test_robotics_project_upload_and_delete():
         assert response.status_code == 302
 
     with app.app_context():
-        assert RoboticsProject.query.get(project_id) is None
+        assert db.session.get(RoboticsProject, project_id) is None
 
 
 def test_hiring_job_post_profile_fields_and_delete():
@@ -756,7 +805,7 @@ def test_hiring_job_post_profile_fields_and_delete():
         assert response.status_code == 302
 
     with app.app_context():
-        assert Job.query.get(job_id) is None
+        assert db.session.get(Job, job_id) is None
 
 
 def test_job_application_notifications_and_status_tracking():
@@ -1012,4 +1061,4 @@ def test_devlog_comment_and_devlog_delete():
         assert response.get_json()["status"] == "deleted"
 
     with app.app_context():
-        assert DevLog.query.get(devlog_id) is None
+        assert db.session.get(DevLog, devlog_id) is None

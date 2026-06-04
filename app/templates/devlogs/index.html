@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}DevFeed — AuthFlow{% endblock %}
-{% block meta_desc %}Follow developer build logs, milestones, progress updates, and project notes from builders in the AuthFlow community.{% endblock %}
+{% block title %}DevFeed — HaradiBots{% endblock %}
+{% block meta_desc %}Follow developer build logs, milestones, progress updates, and project notes from builders in the HaradiBots community.{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/devlogs.css') }}">
@@ -43,7 +43,7 @@
                     {% if current_user.is_authenticated %}
                     <form class="devlog-composer" id="devlogComposer" enctype="multipart/form-data" style="background:var(--surface-2);border-color:var(--border-subtle);">
                         <div class="composer-author">
-                            <div class="avatar-v2 avatar-v2--md">{{ current_user.username[0]|upper }}</div>
+                            {{ user_avatar(current_user, 'avatar-v2 avatar-v2--md') }}
                             <div>
                                 <strong style="color:var(--text-primary);">Post a DevLog</strong>
                                 <p style="margin:0;">Keep it concrete: progress, blockers, proof, next step.</p>
@@ -128,7 +128,7 @@
                         <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
                             {% for user in top_creators %}
                             <a href="{{ url_for('main.public_profile', username=user.username) }}" style="display:flex;align-items:center;gap:var(--sp-3);text-decoration:none;">
-                                <div class="avatar-v2 avatar-v2--sm">{{ user.username[0]|upper }}</div>
+                                {{ user_avatar(user, 'avatar-v2 avatar-v2--sm') }}
                                 <div style="flex:1;min-width:0;">
                                     <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ user.full_name or user.username }}</div>
                                     <div style="font-size:var(--text-xs);color:var(--text-muted);">{{ user.xp_total or 0 }} XP</div>

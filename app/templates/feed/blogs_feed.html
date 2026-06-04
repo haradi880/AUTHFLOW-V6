@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Blogs — AuthFlow{% endblock %}
-{% block meta_desc %}Read developer blogs about AI, robotics, web development, projects, and practical engineering lessons from the AuthFlow community.{% endblock %}
+{% block title %}Blogs — HaradiBots{% endblock %}
+{% block meta_desc %}Read developer blogs about AI, robotics, web development, projects, and practical engineering lessons from the HaradiBots community.{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -51,13 +51,13 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                         <input type="text" class="input-v2" name="q" value="{{ request.args.get('q', '') }}" placeholder="Search blogs..." style="padding-left:36px;">
                     </div>
-                    <select class="input-v2" name="sort" onchange="this.form.submit()" style="width:auto;min-width:120px;">
+                    <select class="input-v2" name="sort" aria-label="Sort blogs" onchange="this.form.submit()" style="width:auto;min-width:120px;">
                         <option value="latest" {{ 'selected' if request.args.get('sort', 'latest') == 'latest' }}>Latest</option>
                         <option value="trending" {{ 'selected' if request.args.get('sort') == 'trending' }}>Trending</option>
                         <option value="most_read" {{ 'selected' if request.args.get('sort') == 'most_read' }}>Most Read</option>
                         <option value="most_liked" {{ 'selected' if request.args.get('sort') == 'most_liked' }}>Most Liked</option>
                     </select>
-                    <select class="input-v2" name="category" onchange="this.form.submit()" style="width:auto;min-width:140px;">
+                    <select class="input-v2" name="category" aria-label="Filter blogs by category" onchange="this.form.submit()" style="width:auto;min-width:140px;">
                         <option value="">All Categories</option>
                         {% for category in categories %}
                         <option value="{{ category.slug }}" {{ 'selected' if request.args.get('category') == category.slug }}>{{ category.name }}</option>
@@ -76,7 +76,7 @@
                         <h2 style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:700;color:var(--text-primary);line-height:1.3;">{{ featured_blog.title }}</h2>
                         <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;">{{ featured_blog.excerpt[:150] }}...</p>
                         <div style="display:flex;align-items:center;gap:var(--sp-2);font-size:var(--text-xs);color:var(--text-faint);">
-                            <div class="avatar-v2 avatar-v2--xs">{{ featured_blog.author.username[0]|upper }}</div>
+                            {{ user_avatar(featured_blog.author, 'avatar-v2 avatar-v2--xs') }}
                             <span>{{ featured_blog.author.username }} · {{ featured_blog.reading_time }} min read</span>
                         </div>
                     </div>

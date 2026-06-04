@@ -21,62 +21,81 @@
         </nav>
 
         <div class="app-content messages-page">
-            <section class="messages-layout">
+            <section class="messages-layout messages-layout--split">
                 <div class="messages-panel animate-fade-up">
                     <header class="messages-panel__header">
                         <div>
                             <p class="messages-panel__eyebrow">Inbox</p>
                             <h1 class="messages-panel__title">Conversations</h1>
                         </div>
-                        <div class="messages-panel__meta">
-                            {{ conversations|length }} {{ 'conversation' if conversations|length == 1 else 'conversations' }}
-                        </div>
+                        <a class="btn-v2 btn-v2--primary btn-v2--sm" href="{{ url_for('main.search') }}">Find People</a>
                     </header>
+
+                    <form method="GET" action="{{ url_for('messages.inbox') }}" class="messages-search">
+                        <input class="input-v2" name="q" value="{{ request.args.get('q', '') }}" placeholder="Search conversations">
+                    </form>
 
                     <div class="conversation-list">
                         {% for conv in conversations %}
-                        <a class="conversation-row {{ 'conversation-row--unread' if conv.unread_count > 0 else '' }}" href="{{ url_for('messages.chat', username=conv.user.username) }}">
+                        {% set item = conversation_payload_fn(conv) %}
+                        <a class="conversation-row {{ 'conversation-row--unread' if item.unread_count > 0 else '' }}" href="{{ url_for('messages.conversation_chat', public_id=conv.public_id) }}">
                             <div class="avatar-v2 avatar-v2--lg conversation-row__avatar">
-                                {% if conv.user.avatar and conv.user.avatar != 'default.jpg' %}
-                                <img src="{{ conv.user.avatar_url }}" alt="{{ conv.user.username }}">
+                                {% if item.avatar_url %}
+                                <img src="{{ item.avatar_url }}" alt="{{ item.title }}">
                                 {% else %}
-                                {{ conv.user.username[0]|upper }}
+                                {{ item.avatar_initial }}
                                 {% endif %}
                             </div>
-
                             <div class="conversation-row__main">
                                 <div class="conversation-row__top">
-                                    <span class="conversation-row__name">{{ conv.user.full_name or conv.user.username }}</span>
-                                    {% if conv.last_message %}
-                                    <time class="conversation-row__time js-local-time" datetime="{{ conv.last_message.created_at.isoformat() }}Z" data-format="short-date">{{ conv.last_message.created_at.strftime('%b %d') }}</time>
+                                    <span class="conversation-row__name">{{ item.title }}</span>
+                                    {% if item.last_message %}
+                                    <time class="conversation-row__time js-local-time" datetime="{{ item.last_message.created_at }}" data-format="short-date">{{ item.last_message.created_at }}</time>
                                     {% endif %}
                                 </div>
                                 <div class="conversation-row__preview">
-                                    {% if conv.last_message %}
-                                        {% if conv.last_message.sender_id == current_user.id %}You: {% endif %}{{ conv.last_message.content }}
+                                    {% if item.last_message %}
+                                        {% if item.last_message.sender_id == current_user.id %}You: {% endif %}{{ item.last_message.content }}
                                     {% else %}
-                                        Start the conversation
+                                        No messages yet
                                     {% endif %}
                                 </div>
                             </div>
-
-                            {% if conv.unread_count > 0 %}
-                            <span class="conversation-row__badge" aria-label="{{ conv.unread_count }} unread messages">{{ conv.unread_count }}</span>
+                            {% if item.unread_count > 0 %}
+                            <span class="conversation-row__badge" aria-label="{{ item.unread_count }} unread messages">{{ item.unread_count }}</span>
                             {% endif %}
                         </a>
                         {% else %}
                         <div class="messages-empty">
                             <div class="empty-v2" style="border:none;">
-                                <div class="empty-v2__icon">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                                </div>
                                 <div class="empty-v2__title">No conversations yet</div>
-                                <div class="empty-v2__desc">Message a builder from their profile and your chats will live here.</div>
+                                <div class="empty-v2__desc">Open a profile and start a direct message, or create a group.</div>
                             </div>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
+
+                <aside class="messages-panel messages-compose animate-fade-up">
+                    <header class="messages-panel__header">
+                        <div>
+                            <p class="messages-panel__eyebrow">Groups</p>
+                            <h2 class="messages-panel__title">Create Group</h2>
+                        </div>
+                    </header>
+                    <form method="POST" action="{{ url_for('messages.create_group') }}" class="messages-group-form">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <label>
+                            <span>Group name</span>
+                            <input class="input-v2" name="title" maxlength="160" placeholder="Robot Lab">
+                        </label>
+                        <label>
+                            <span>Members</span>
+                            <textarea class="input-v2" name="members" rows="5" placeholder="one username per line"></textarea>
+                        </label>
+                        <button class="btn-v2 btn-v2--primary" type="submit">Create Group</button>
+                    </form>
+                </aside>
             </section>
         </div>
     </div>

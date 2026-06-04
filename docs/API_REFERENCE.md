@@ -1,6 +1,6 @@
 # API Reference
 
-AuthFlow has two kinds of JSON endpoints:
+HaradiBots has two kinds of JSON endpoints:
 
 - `/api/*` endpoints for public content, JWT login, QR generation, live counts, and current-user data.
 - Session-backed AJAX endpoints used by the Jinja frontend for likes, bookmarks, follows, messages, stars, and tag suggestions.
@@ -674,5 +674,5 @@ POST /admin/content/projects/<project_id>/status
 
 - Public list endpoints are fixed at 25 records and do not expose pagination controls.
 - JWT tokens are not revocable except by rotating `SECRET_KEY`.
-- `/api/login` has no dedicated API rate limiter decorator at the route level.
+- `/api/login` and authenticated legacy API endpoints are rate limited, but the API does not yet expose user-managed token revocation.
 - Public API responses are intentionally compact and do not include every database field.

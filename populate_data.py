@@ -44,8 +44,6 @@ def get_or_create(model, defaults=None, **lookup):
 def populate(app):
     """Idempotently populate local/demo data."""
     with app.app_context():
-        db.create_all()
-
         for name, slug in CATEGORIES:
             category, created = get_or_create(Category, slug=slug, defaults={"name": name})
             if not created and category.name != name:
@@ -60,10 +58,10 @@ def populate(app):
             User,
             username="admin",
             defaults={
-                "email": os.getenv("ADMIN_EMAIL", "admin@authflow.local"),
-                "full_name": "AuthFlow Admin",
+                "email": os.getenv("ADMIN_EMAIL", "admin@haradibots.local"),
+                "full_name": "HaradiBots Admin",
                 "headline": "Platform administrator",
-                "bio": "Maintains the AuthFlow community and moderation workflows.",
+                "bio": "Maintains the HaradiBots community and moderation workflows.",
                 "is_admin": True,
                 "is_verified": True,
             },
@@ -75,7 +73,7 @@ def populate(app):
             User,
             username="demo",
             defaults={
-                "email": "demo@authflow.local",
+                "email": "demo@haradibots.local",
                 "full_name": "Demo Developer",
                 "headline": "Full-stack developer building Flask and AI tools",
                 "bio": "I build useful software products and share practical notes from the work.",
@@ -93,12 +91,12 @@ def populate(app):
         db.session.flush()
 
         web = Category.query.filter_by(slug="web-dev").first()
-        if not Blog.query.filter_by(slug="welcome-to-authflow").first():
+        if not Blog.query.filter_by(slug="welcome-to-haradibots").first():
             blog = Blog(
-                title="Welcome to AuthFlow",
-                slug="welcome-to-authflow",
-                content="AuthFlow is a developer community for publishing, projects, and build-in-public work.",
-                excerpt="A quick tour of the AuthFlow developer platform.",
+                title="Welcome to HaradiBots",
+                slug="welcome-to-haradibots",
+                content="HaradiBots is a developer community for publishing, projects, and build-in-public work.",
+                excerpt="A quick tour of the HaradiBots developer platform.",
                 status="published",
                 reading_time=1,
                 user_id=demo.id,
@@ -109,13 +107,13 @@ def populate(app):
             db.session.flush()
             award_xp(demo, "publish_blog", source=blog, commit=False)
 
-        if not Project.query.filter_by(slug="authflow-platform").first():
+        if not Project.query.filter_by(slug="haradibots-platform").first():
             project = Project(
-                title="AuthFlow Platform",
-                slug="authflow-platform",
+                title="HaradiBots Platform",
+                slug="haradibots-platform",
                 description="A Flask developer social platform with profiles, blogs, projects, messages, and gamification.",
-                github_url="https://github.com/example/authflow",
-                demo_url="https://authflow.local",
+                github_url="https://github.com/example/haradibots",
+                demo_url="https://haradibots.local",
                 status="published",
                 user_id=demo.id,
                 category_id=web.id if web else None,
@@ -127,7 +125,7 @@ def populate(app):
 
         if not DevLog.query.first():
             devlog = DevLog(
-                content="Day 1: seeded AuthFlow with profiles, publishing, projects, messages, and the first build-in-public DevLog. #flask #buildinpublic",
+                content="Day 1: seeded HaradiBots with profiles, publishing, projects, messages, and the first build-in-public DevLog. #flask #buildinpublic",
                 progress=35,
                 milestone="Developer ecosystem foundation is online",
                 user_id=demo.id,
@@ -141,7 +139,7 @@ def populate(app):
         if not Message.query.first():
             db.session.add_all(
                 [
-                    Message(sender_id=admin.id, recipient_id=demo.id, content="Welcome to AuthFlow. Your demo workspace is ready."),
+                    Message(sender_id=admin.id, recipient_id=demo.id, content="Welcome to HaradiBots. Your demo workspace is ready."),
                     Message(sender_id=demo.id, recipient_id=admin.id, content="Thanks. The platform already feels alive."),
                 ]
             )
@@ -151,7 +149,7 @@ def populate(app):
                 Notification(
                     user_id=demo.id,
                     action="system",
-                    message="Welcome to AuthFlow. Complete your profile to earn XP.",
+                    message="Welcome to HaradiBots. Complete your profile to earn XP.",
                     from_user_id=admin.id,
                 )
             )
@@ -164,5 +162,5 @@ if __name__ == "__main__":
     app = create_app()
     populate(app)
     print("\nSample accounts:")
-    print(f"  Admin: {os.getenv('ADMIN_EMAIL', 'admin@authflow.local')} / {os.getenv('ADMIN_PASSWORD', 'change-me-admin')}")
-    print(f"  User:  demo@authflow.local / {os.getenv('DEMO_PASSWORD', 'demo12345!')}")
+    print(f"  Admin: {os.getenv('ADMIN_EMAIL', 'admin@haradibots.local')} / {os.getenv('ADMIN_PASSWORD', 'change-me-admin')}")
+    print(f"  User:  demo@haradibots.local / {os.getenv('DEMO_PASSWORD', 'demo12345!')}")

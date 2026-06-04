@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit Blog' if editing else 'Write Blog' }} — AuthFlow{% endblock %}
+{% block title %}{{ 'Edit Blog' if editing else 'Write Blog' }} — HaradiBots{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
@@ -12,6 +12,7 @@
         <form method="POST" enctype="multipart/form-data" id="blogForm" style="display:flex;flex-direction:column;min-height:100vh;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="status" id="statusInput" value="{{ blog.status if blog else 'draft' }}">
+            <input type="hidden" name="remove_thumbnail" id="removeThumbnailInput" value="0">
 
             <nav class="topnav-v2">
                 <div class="topnav-v2__left">
@@ -58,7 +59,7 @@
                     <div id="thumbnailArea" style="border:2px dashed var(--border-subtle);border-radius:var(--r-xl);padding:var(--sp-8);text-align:center;cursor:pointer;background:var(--surface-3);transition:all var(--dur-fast);" onclick="document.getElementById('thumbnailInput').click()" ondragover="this.style.borderColor='var(--primary)';this.style.background='var(--primary-muted)';event.preventDefault();" ondragleave="this.style.borderColor='var(--border-subtle)';this.style.background='var(--surface-3)';event.preventDefault();" ondrop="handleDrop(event)" {{ 'style="display:none;"'|safe if blog and blog.thumbnail else '' }}>
                         <div style="font-size:32px;margin-bottom:var(--sp-2);color:var(--text-muted);">📸</div>
                         <div style="font-weight:500;color:var(--text-primary);margin-bottom:var(--sp-1);">Click or drag image here</div>
-                        <div style="font-size:var(--text-xs);color:var(--text-faint);">PNG, JPG or WebP (max 2MB)</div>
+                        <div style="font-size:var(--text-xs);color:var(--text-faint);">PNG, JPG, GIF or WebP (max 25MB)</div>
                         <input type="file" id="thumbnailInput" name="thumbnail" accept="image/*" style="display:none;" onchange="previewThumbnail(event)">
                     </div>
                     
@@ -104,11 +105,17 @@
         document.getElementById('thumbnailImage').src = '';
         document.getElementById('thumbnailPreview').style.display = 'none';
         document.getElementById('thumbnailArea').style.display = 'block';
+        document.getElementById('removeThumbnailInput').value = '1';
     }
 
     function previewThumbnail(event) {
         const file = event.target.files[0];
         if (!file) return;
+        if (!validateThumbnail(file)) {
+            event.target.value = '';
+            return;
+        }
+        document.getElementById('removeThumbnailInput').value = '0';
         const reader = new FileReader();
         reader.onload = function(e) {
             document.getElementById('thumbnailImage').src = e.target.result;
@@ -123,10 +130,24 @@
         e.currentTarget.style.borderColor = 'var(--border-subtle)';
         e.currentTarget.style.background = 'var(--surface-3)';
         const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) {
+        if (file && validateThumbnail(file)) {
             document.getElementById('thumbnailInput').files = e.dataTransfer.files;
             previewThumbnail({target: {files: [file]}});
         }
+    }
+
+    function validateThumbnail(file) {
+        const allowed = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+        const maxBytes = 25 * 1024 * 1024;
+        if (!allowed.includes(file.type)) {
+            window.toast?.show('Use PNG, JPG, GIF or WebP for cover images.', 'error');
+            return false;
+        }
+        if (file.size > maxBytes) {
+            window.toast?.show('Cover image must be 25MB or smaller.', 'error');
+            return false;
+        }
+        return true;
     }
 
     function toggleMobilePreview() {
@@ -165,7 +186,12 @@
             try {
                 const response = await fetch(`/tags/suggest?q=${encodeURIComponent(current)}`);
                 const tags = await response.json();
-                datalist.innerHTML = tags.map(tag => `<option value="${tag.name}"></option>`).join('');
+                datalist.replaceChildren();
+                tags.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag.name || '';
+                    datalist.appendChild(option);
+                });
             } catch(e){}
         });
     }

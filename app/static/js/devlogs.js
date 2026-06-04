@@ -41,7 +41,7 @@ class DevLogExperience {
                 const progressValue = document.querySelector('[data-progress-value]');
                 if (progressValue) progressValue.textContent = '25%';
                 if (status) status.textContent = 'Published. Keep the streak alive tomorrow.';
-                window.AuthFlow?.formatLocalTimes?.(this.feed?.firstElementChild || document);
+                window.HaradiBots?.formatLocalTimes?.(this.feed?.firstElementChild || document);
                 window.toast?.show('DevLog posted.', 'success');
             } catch (error) {
                 if (status) status.textContent = error.message;
@@ -135,7 +135,7 @@ class DevLogExperience {
             const counter = card.querySelector('[data-count="comments"]');
             if (counter) counter.textContent = payload.count;
             input.value = '';
-            window.AuthFlow?.formatLocalTimes?.(card);
+            window.HaradiBots?.formatLocalTimes?.(card);
         } catch (error) {
             window.toast?.show(error.message, 'error');
         } finally {
@@ -158,7 +158,7 @@ class DevLogExperience {
                 if (!response.ok) throw new Error('Could not load more DevLogs.');
                 this.feed?.insertAdjacentHTML('beforeend', payload.html);
                 this.bindActions(this.feed || document);
-                window.AuthFlow?.formatLocalTimes?.(this.feed || document);
+                window.HaradiBots?.formatLocalTimes?.(this.feed || document);
                 if (payload.has_next) {
                     this.loadMoreButton.dataset.nextPage = payload.next_page;
                     this.loadMoreButton.disabled = false;

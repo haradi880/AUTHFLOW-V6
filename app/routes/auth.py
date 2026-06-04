@@ -74,6 +74,7 @@ def register():
 
 
 @auth_bp.route("/verify-signup", methods=["GET", "POST"])
+@rate_limit(max_calls=8, window_seconds=300, scope="verify-signup")
 def verify_signup():
     email = session.get("verify_email")
     if not email:
@@ -211,6 +212,7 @@ def forgot_password():
 
 
 @auth_bp.route("/reset-verify", methods=["GET", "POST"])
+@rate_limit(max_calls=8, window_seconds=300, scope="reset-verify")
 def reset_verify():
     email = session.get("reset_email")
     if not email:
@@ -228,6 +230,7 @@ def reset_verify():
 
 
 @auth_bp.route("/new-password", methods=["GET", "POST"])
+@rate_limit(max_calls=5, window_seconds=300, scope="new-password")
 def new_password():
     if not session.get("otp_verified"):
         flash("Please verify your identity first.", "warning")

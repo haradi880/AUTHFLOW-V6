@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Donate to AuthFlow - UPI Donation{% endblock %}
-{% block meta_desc %}Support AuthFlow development with a UPI donation and help keep the developer and robotics community growing.{% endblock %}
+{% block title %}Donate to HaradiBots - UPI Donation{% endblock %}
+{% block meta_desc %}Support HaradiBots development with a UPI donation and help keep the developer and robotics community growing.{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/support.css') }}">
 {% endblock %}
@@ -90,7 +90,7 @@ async function generateQRCode(amount) {
     try {
         const response = await fetch('{{ url_for("main.generate_qr") }}', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.AuthFlow.csrfToken},
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.HaradiBots.csrfToken},
             body: JSON.stringify({amount})
         });
         const data = await response.json();

@@ -39,24 +39,28 @@ def _env_float(name: str, default: float) -> float:
 
 
 class Config:
+    APP_ENV = os.getenv("APP_ENV") or os.getenv("FLASK_ENV") or "development"
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me")
-    APP_NAME = os.getenv("APP_NAME") or "AUTHFLOW"
+    APP_NAME = os.getenv("APP_NAME") or "HaradiBots"
     PUBLIC_BASE_URL = (os.getenv("PUBLIC_BASE_URL") or "https://haradibots.onrender.com").rstrip("/")
     HOST = os.getenv("HOST") or "0.0.0.0"
     PORT = _env_int("PORT", 5000)
     SQLALCHEMY_DATABASE_URI = _database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    READINESS_CACHE_SECONDS = _env_float("READINESS_CACHE_SECONDS", 10)
 
     _upload_folder = Path(os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "uploads")))
     UPLOAD_FOLDER = str(_upload_folder if _upload_folder.is_absolute() else BASE_DIR / _upload_folder)
-    MAX_CONTENT_LENGTH = _env_int("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)
+    MAX_CONTENT_LENGTH = _env_int("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)
     MAX_UPLOAD_BYTES = _env_int("MAX_UPLOAD_BYTES", MAX_CONTENT_LENGTH)
     MAX_IMAGE_PIXELS = _env_int("MAX_IMAGE_PIXELS", 24_000_000)
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
     ALLOWED_VIDEO_EXTENSIONS = {"mp4", "webm", "mov"}
     MESSAGE_ATTACHMENT_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "pdf", "txt", "zip"}
-    MESSAGE_ATTACHMENT_MAX_BYTES = _env_int("MESSAGE_ATTACHMENT_MAX_BYTES", 5 * 1024 * 1024)
+    MESSAGE_ATTACHMENT_MAX_BYTES = _env_int("MESSAGE_ATTACHMENT_MAX_BYTES", 25 * 1024 * 1024)
+    VIRUS_SCAN_ENABLED = _env_bool("VIRUS_SCAN_ENABLED", False)
+    VIRUS_SCAN_COMMAND = os.getenv("VIRUS_SCAN_COMMAND")
 
     PERMANENT_SESSION_LIFETIME = timedelta(days=_env_int("SESSION_DAYS", 30))
     REMEMBER_COOKIE_DURATION = timedelta(days=_env_int("REMEMBER_DAYS", 30))
@@ -80,64 +84,72 @@ class Config:
     MAIL_SENDER_NAME = os.getenv("MAIL_SENDER_NAME") or APP_NAME
     MAIL_SUPPRESS_SEND = _env_bool("MAIL_SUPPRESS_SEND", False)
 
-    MAIL_BACKUP_SERVER = os.getenv("MAIL_BACKUP_SERVER")
-    MAIL_BACKUP_PORT = _env_int("MAIL_BACKUP_PORT", 587)
-    MAIL_BACKUP_USE_TLS = _env_bool("MAIL_BACKUP_USE_TLS", True)
-    MAIL_BACKUP_USE_SSL = _env_bool("MAIL_BACKUP_USE_SSL", False)
-    MAIL_BACKUP_USERNAME = os.getenv("MAIL_BACKUP_USERNAME")
-    MAIL_BACKUP_PASSWORD = os.getenv("MAIL_BACKUP_PASSWORD")
-    MAIL_BACKUP_DEFAULT_SENDER = os.getenv("MAIL_BACKUP_DEFAULT_SENDER") or MAIL_DEFAULT_SENDER
-
-    EMAIL_BACKEND = (os.getenv("EMAIL_BACKEND") or "auto").lower()
-    EMAIL_DELIVERY_ORDER = os.getenv("EMAIL_DELIVERY_ORDER") or "smtp,backup_smtp,resend,sendgrid,file"
+    EMAIL_BACKEND = (os.getenv("EMAIL_BACKEND") or "smtp").lower()
+    EMAIL_DELIVERY_ORDER = os.getenv("EMAIL_DELIVERY_ORDER") or "smtp"
     EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", False)
     EMAIL_OUTBOX_FOLDER = os.getenv("EMAIL_OUTBOX_FOLDER") or str(BASE_DIR / "logs" / "email_outbox")
     EMAIL_ASYNC = _env_bool("EMAIL_ASYNC", True)
-    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-    RESEND_FROM = os.getenv("RESEND_FROM") or MAIL_DEFAULT_SENDER
-    SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-    SENDGRID_FROM = os.getenv("SENDGRID_FROM") or MAIL_DEFAULT_SENDER
 
     MAX_LOGIN_ATTEMPTS = _env_int("MAX_LOGIN_ATTEMPTS", 5)
     LOGIN_LOCK_MINUTES = _env_int("LOGIN_LOCK_MINUTES", 15)
     ITEMS_PER_PAGE = _env_int("ITEMS_PER_PAGE", 12)
     JWT_EXPIRATION_HOURS = _env_int("JWT_EXPIRATION_HOURS", 24)
-    RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI") or "memory://"
-    REDIS_URL = os.getenv("REDIS_URL") or os.getenv("RATELIMIT_STORAGE_URI") or "redis://localhost:6379/0"
+    JWT_ISSUER = os.getenv("JWT_ISSUER") or "haradibots"
+    JWT_AUDIENCE = os.getenv("JWT_AUDIENCE") or "haradibots-api"
+    SITEMAP_CACHE_SECONDS = _env_int("SITEMAP_CACHE_SECONDS", 600)
+    _redis_url = os.getenv("REDIS_URL")
+    _ratelimit_storage_uri = os.getenv("RATELIMIT_STORAGE_URI")
+    RATELIMIT_STORAGE_URI = _ratelimit_storage_uri or _redis_url or "memory://"
+    REDIS_URL = _redis_url or _ratelimit_storage_uri
     TASK_QUEUE_ASYNC = _env_bool("TASK_QUEUE_ASYNC", False)
     NOTIFICATION_MAX_RETRIES = _env_int("NOTIFICATION_MAX_RETRIES", 3)
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
     UPLOAD_STORAGE_BUCKET = os.getenv("UPLOAD_STORAGE_BUCKET") or "uploads"
+    PRIVATE_UPLOAD_STORAGE_BUCKET = os.getenv("PRIVATE_UPLOAD_STORAGE_BUCKET") or "private-uploads"
+    UPLOAD_KEEP_LOCAL = _env_bool("UPLOAD_KEEP_LOCAL", False)
     BACKUP_STORAGE_BUCKET = os.getenv("BACKUP_STORAGE_BUCKET") or "backups"
     BACKUP_KEEP_LOCAL = _env_int("BACKUP_KEEP_LOCAL", 20)
+    REQUEST_LOGGING_ENABLED = _env_bool("REQUEST_LOGGING_ENABLED", True)
+    METRICS_TOKEN = os.getenv("METRICS_TOKEN")
+    PUBLIC_PAGE_CACHE_ENABLED = _env_bool("PUBLIC_PAGE_CACHE_ENABLED", True)
+    PUBLIC_PAGE_CACHE_SECONDS = _env_int("PUBLIC_PAGE_CACHE_SECONDS", 120)
 
     SECURITY_HEADERS = {
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "SAMEORIGIN",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "X-Download-Options": "noopen",
+        "Cross-Origin-Opener-Policy": "same-origin",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     }
 
 
 class DevelopmentConfig(Config):
+    APP_ENV = "development"
     DEBUG = True
-    EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", True)
+    REDIS_URL = Config.REDIS_URL or "redis://localhost:6379/0"
+    EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", False)
 
 
 class TestingConfig(Config):
+    APP_ENV = "testing"
     TESTING = True
     WTF_CSRF_ENABLED = False
     SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL", "sqlite:///:memory:")
     MAIL_SUPPRESS_SEND = True
     EMAIL_ASYNC = False
     RATELIMIT_ENABLED = False
+    PUBLIC_PAGE_CACHE_ENABLED = False
 
 
 class ProductionConfig(Config):
+    APP_ENV = "production"
     DEBUG = False
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True
+    EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", False)
 
 
 config_by_name = {

@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how AuthFlow is assembled at runtime and where each feature lives.
+This document explains how HaradiBots is assembled at runtime and where each feature lives.
 
 ## High-Level Shape
 
@@ -181,7 +181,7 @@ There is also `app/utils/helpers.py`, which imports and re-exports `create_notif
 ```text
 Browser submits POST form
   |
-base.html injects _csrf_token if missing
+base.html injects _csrf_token if missing on authenticated or POST-capable public pages
   |
 csrf_protect() checks session token
   |
@@ -225,10 +225,12 @@ Client sends Authorization: Bearer <token>
 3. Folder is checked against `avatars`, `banners`, `blogs`, `projects`, or `devlogs`.
 4. Extension is checked against allowed image extensions. DevLog media also allows configured short-form video extensions.
 5. A random hex prefix and secure filename are generated.
-6. File is saved under `UPLOAD_FOLDER/<folder>/`.
+6. File is written to `UPLOAD_FOLDER/<folder>/` as a temporary processing file.
 7. Pillow verifies images.
 8. Images are resized if larger than the configured max size.
-9. The generated filename is stored in the database.
+9. The processed file is uploaded to Supabase Storage when configured.
+10. With `UPLOAD_KEEP_LOCAL=false`, the local processing file is removed after Supabase upload succeeds.
+11. The generated filename and related metadata are stored in the database.
 
 Default image names are protected from deletion:
 
@@ -326,7 +328,7 @@ instance/
 ## Current Architecture Tradeoffs
 
 - All models live in one file. This makes relationships easy to inspect, but the file will become heavy as the product grows.
-- The local development entry point calls `db.create_all()`. This is convenient locally, but production should rely on migrations.
-- The rate limiter is in memory. It does not coordinate across multiple worker processes.
+- The local development entry point can call `db.create_all()` for convenience, but production uses migrations only.
+- The rate limiter can use memory in development. Production requires a shared Redis-backed `RATELIMIT_STORAGE_URI`.
 - JWT auth is simple and stateless. There is no token revocation table.
-- Uploads are local files. Production deployments need persistent storage or object storage.
+- Uploads are Supabase-first with local disk as temporary/cache storage. Advanced media processing still needs async thumbnail/transcoding/streaming support.

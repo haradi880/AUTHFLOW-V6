@@ -1,7 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ profile.username }} - AuthFlow{% endblock %}
-{% block meta_desc %}{{ (profile.headline or profile.bio or ('Developer profile for @' ~ profile.username ~ ' on AuthFlow'))|striptags|truncate(155, true, '') }}{% endblock %}
-{% block canonical_url %}{{ url_for('main.public_profile', username=profile.username, _external=True) }}{% endblock %}
+{% block title %}{{ profile.username }} - HaradiBots{% endblock %}
+{% block meta_desc %}{{ (profile.headline or profile.bio or ('Developer profile for @' ~ profile.username ~ ' on HaradiBots'))|striptags|truncate(155, true, '') }}{% endblock %}
+{% block og_type %}profile{% endblock %}
+{% block canonical_url %}{{ public_url_for('main.public_profile', username=profile.username) }}{% endblock %}
+{% block og_image %}{% if profile.avatar_url %}{{ profile.avatar_url if profile.avatar_url.startswith('http') else public_url_for('uploaded_file', folder='avatars', filename=profile.avatar) }}{% endif %}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -9,12 +11,24 @@
 {% endblock %}
 
 {% block meta %}
-<meta name="description" content="{{ profile.bio }}">
-<meta property="og:title" content="{{ profile.username }}'s Profile">
-<meta property="og:description" content="{{ profile.bio }}">
-<meta property="og:type" content="profile">
 <meta property="profile:username" content="{{ profile.username }}">
-<link rel="canonical" href="{{ request.url }}">
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": {{ (profile.full_name or profile.username)|tojson }},
+    "alternateName": {{ ("@" ~ profile.username)|tojson }},
+    "url": {{ public_url_for('main.public_profile', username=profile.username)|tojson }},
+    "description": {{ (profile.headline or profile.bio or "")|tojson }},
+    "knowsAbout": {{ (profile.skills or [])|tojson }}
+    {% if profile.avatar_url %},
+    "image": {{ (profile.avatar_url if profile.avatar_url.startswith('http') else public_url_for('uploaded_file', folder='avatars', filename=profile.avatar))|tojson }}
+    {% endif %}
+}
+</script>
 {% endblock %}
 
 {% block content %}

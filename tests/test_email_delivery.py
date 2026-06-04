@@ -5,10 +5,11 @@ from app.utils.emailer import EmailDeliveryError, send_email
 def test_email_uses_api_fallback_after_smtp_failure(monkeypatch):
     app = create_app("testing")
     app.config.update(
+        EMAIL_BACKEND="auto",
         MAIL_SUPPRESS_SEND=False,
         EMAIL_DELIVERY_ORDER="smtp,resend",
         RESEND_API_KEY="test-key",
-        RESEND_FROM="AuthFlow <noreply@example.com>",
+        RESEND_FROM="HaradiBots <noreply@example.com>",
         MAIL_USERNAME="smtp-user",
         MAIL_PASSWORD="smtp-password",
     )
@@ -32,6 +33,7 @@ def test_email_uses_api_fallback_after_smtp_failure(monkeypatch):
 def test_email_file_fallback_writes_outbox_file(tmp_path):
     app = create_app("testing")
     app.config.update(
+        EMAIL_BACKEND="auto",
         MAIL_SUPPRESS_SEND=False,
         EMAIL_DELIVERY_ORDER="file",
         EMAIL_FILE_FALLBACK=True,

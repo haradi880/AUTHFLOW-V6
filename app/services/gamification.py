@@ -22,7 +22,7 @@ XP_REWARDS = {
 DAILY_CAPPED_ACTIONS = {"daily_login", "daily_devlog"}
 
 DEFAULT_BADGES = [
-    {"slug": "first-login", "name": "First Login", "description": "Started your AuthFlow journey.", "icon": "1", "tier": "bronze", "category": "account", "criteria_type": "xp", "criteria_value": 10, "xp_reward": 0},
+    {"slug": "first-login", "name": "First Login", "description": "Started your HaradiBots journey.", "icon": "1", "tier": "bronze", "category": "account", "criteria_type": "xp", "criteria_value": 10, "xp_reward": 0},
     {"slug": "profile-ready", "name": "Profile Ready", "description": "Completed a useful creator profile.", "icon": "ID", "tier": "silver", "category": "account", "criteria_type": "action", "criteria_value": 1, "xp_reward": 0},
     {"slug": "writer", "name": "Writer", "description": "Published a blog post.", "icon": "W", "tier": "bronze", "category": "content", "criteria_type": "action", "criteria_value": 1, "xp_reward": 0},
     {"slug": "builder", "name": "Builder", "description": "Published a project.", "icon": "B", "tier": "bronze", "category": "content", "criteria_type": "action", "criteria_value": 1, "xp_reward": 0},

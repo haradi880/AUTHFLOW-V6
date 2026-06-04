@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ user.username }} Following - AuthFlow{% endblock %}
+{% block title %}{{ user.username }} Following - HaradiBots{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
@@ -12,7 +12,7 @@
         <div class="card-header"><h1 class="card-title">@{{ user.username }} follows</h1></div>
         {% for followed in following %}
         <a href="{{ url_for('main.public_profile', username=followed.username) }}" class="settings-nav-item" style="text-decoration: none; color: inherit;">
-            <div class="settings-nav-left"><div class="user-avatar">{{ followed.username[0]|upper }}</div><div class="settings-nav-text"><h4>{{ followed.full_name or followed.username }}</h4><p>@{{ followed.username }}</p></div></div>
+            <div class="settings-nav-left">{{ user_avatar(followed, 'user-avatar') }}<div class="settings-nav-text"><h4>{{ followed.full_name or followed.username }}</h4><p>@{{ followed.username }}</p></div></div>
         </a>
         {% else %}<p style="color: var(--text-muted);">Not following anyone yet.</p>{% endfor %}
     </section>

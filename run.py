@@ -1,11 +1,10 @@
 import os
 from pathlib import Path
 
-from flask_migrate import stamp as migrate_stamp, upgrade as migrate_upgrade
+from flask_migrate import upgrade as migrate_upgrade
 from sqlalchemy import inspect
 
-from app import create_app
-from app.extensions import db
+from app import create_app, db
 from populate_data import populate
 
 def _sqlite_path(app):
@@ -34,12 +33,16 @@ def prepare_database(app):
     db_path = _sqlite_path(app)
 
     if db_path and not db_path.exists():
-        print(f"Database not found at {db_path}. Initializing sample data...")
+        print(f"Database not found at {db_path}. Applying migrations and initializing sample data...")
+        with app.app_context():
+            migrate_upgrade()
         populate(app)
         return
 
     if db_path:
-        print("Database ready.")
+        with app.app_context():
+            migrate_upgrade()
+        print("SQLite database migrations applied.")
         return
 
     with app.app_context():
@@ -51,17 +54,15 @@ def prepare_database(app):
             print("External database migrations applied.")
             return
 
-        print("External database is empty. Creating schema...")
-        db.create_all()
-        migrate_stamp(revision="head")
-        print("External database initialized.")
+        print("External database is empty. Applying migrations...")
+        migrate_upgrade()
+        print("External database migrations applied.")
 
 
 app = create_app()
 
-prepare_database(app)
-
 if __name__ == "__main__":
+    prepare_database(app)
     host = app.config.get("HOST", "0.0.0.0")
     port = int(app.config.get("PORT", 5000))
 

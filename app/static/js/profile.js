@@ -35,7 +35,7 @@ class ProfileManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': window.AuthFlow?.csrfToken || ''
+                    'X-CSRFToken': window.HaradiBots?.csrfToken || ''
                 }
             });
 

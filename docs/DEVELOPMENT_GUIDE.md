@@ -4,8 +4,8 @@ This guide covers local setup, common commands, feature workflow, testing, migra
 
 ## Requirements
 
-- Python 3.10 works with the included `venv`.
-- Python 3.8+ should work based on dependencies, but the current local environment is Python 3.10.
+- Python 3.11 is the CI target.
+- Python 3.10+ should work with the current dependency set.
 - SQLite for local development.
 - PostgreSQL for production or production-like testing.
 
@@ -14,9 +14,9 @@ This guide covers local setup, common commands, feature workflow, testing, migra
 From the project root:
 
 ```powershell
-cd "g:\Projects\haradi.bot\python auth V3 best one - Copy"
+cd "g:\Projects\haradi.bot\python auth V7 - Copy"
 .\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 Create `.env`:
@@ -46,7 +46,7 @@ The app listens on:
 http://127.0.0.1:5000
 ```
 
-`run.py` creates missing tables. If the local SQLite database is new, it seeds demo data.
+`run.py` can create missing tables for local development only. If the local SQLite database is new, it seeds demo data. Production uses Alembic migrations only.
 
 ## Common Commands
 
@@ -55,7 +55,7 @@ http://127.0.0.1:5000
 .\venv\Scripts\python.exe run.py
 
 # Run tests
-.\venv\Scripts\python.exe -m pytest -q
+.\venv\Scripts\python.exe -m pytest -q -W error::sqlalchemy.exc.LegacyAPIWarning
 
 # Run one test file
 .\venv\Scripts\python.exe -m pytest tests\test_app_smoke.py -q
@@ -66,6 +66,9 @@ http://127.0.0.1:5000
 # Use Flask CLI
 $env:FLASK_APP='run.py'
 .\venv\Scripts\flask.exe --help
+
+# Check production-critical config before deploy
+.\venv\Scripts\flask.exe --app app:create_app production-check
 
 # Initialize categories and default admin through CLI
 $env:FLASK_APP='run.py'
@@ -139,7 +142,7 @@ Most pages extend `base.html`:
 
 ```jinja
 {% extends "base.html" %}
-{% block title %}Page Title - AuthFlow{% endblock %}
+{% block title %}Page Title - HaradiBots{% endblock %}
 ```
 
 Common components:
@@ -154,7 +157,7 @@ components/skeleton.html
 
 Remember:
 
-- POST forms need `_csrf_token`. `base.html` injects it automatically on submit if missing, but explicit hidden inputs are clearer in important forms.
+- POST forms need `_csrf_token`. `base.html` injects it automatically on authenticated and POST-capable public pages if missing, but explicit hidden inputs are clearer in important forms.
 - Use `url_for(...)` for internal links.
 - Use `upload_url` filter or model URL properties for uploaded media.
 - Use `.js-local-time` with ISO datetime strings for browser-local time rendering.
@@ -163,9 +166,9 @@ Remember:
 
 Global behavior:
 
-- `base.html` creates `window.AuthFlow.csrfToken`.
-- `base.html` wraps `window.fetch` and adds `X-CSRFToken` to non-GET requests.
-- `main.js` exposes `window.AuthFlow.formatLocalTime()` and `formatLocalTimes()`.
+- `base.html` creates `window.HaradiBots.csrfToken` only where a page needs unsafe requests.
+- `base.html` wraps `window.fetch` and adds `X-CSRFToken` to non-GET requests when a token is present.
+- `main.js` exposes `window.HaradiBots.formatLocalTime()` and `formatLocalTimes()`.
 - Toasts are available through `window.toast`.
 
 Feature scripts:
@@ -340,14 +343,15 @@ Check:
 
 Check:
 
-- The file exists under `UPLOAD_FOLDER/<folder>/`.
-- The folder is one of `avatars`, `banners`, `blogs`, or `projects`.
+- If Supabase is configured and `UPLOAD_KEEP_LOCAL=false`, the local file should not remain under `UPLOAD_FOLDER`; check the `/uploads/<folder>/<filename>` route redirects to Supabase.
+- If Supabase is not configured for local development, the file should exist under `UPLOAD_FOLDER/<folder>/`.
+- The folder is one of `avatars`, `banners`, `blogs`, `projects`, or `devlogs`.
 - The database stores only the filename, not the full path.
 - The template uses `/uploads/<folder>/<filename>` through model properties or `upload_url`.
 
 ### Rate Limit During Manual Testing
 
-The limiter is process-local and keyed by scope, user/ip, and endpoint. Restarting the dev server clears it.
+The limiter is keyed by scope, user/ip, and endpoint. Local development may use `memory://`, so restarting the dev server clears it. Production must use Redis through `RATELIMIT_STORAGE_URI`.
 
 ## Conventions
 

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
-{% block title %}{{ 'Account Suspended' if status == 'suspended' else 'Account Deleted' }} - AuthFlow{% endblock %}
-{% block meta_desc %}{{ 'This AuthFlow account is suspended and cannot access the platform until an administrator reviews it.' if status == 'suspended' else 'This AuthFlow account has been deleted and is no longer available.' }}{% endblock %}
+{% block title %}{{ 'Account Suspended' if status == 'suspended' else 'Account Deleted' }} - HaradiBots{% endblock %}
+{% block meta_desc %}{{ 'This HaradiBots account is suspended and cannot access the platform until an administrator reviews it.' if status == 'suspended' else 'This HaradiBots account has been deleted and is no longer available.' }}{% endblock %}
 
 {% block content %}
 <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:var(--sp-6);background:radial-gradient(circle at center, var(--surface-2) 0%, var(--surface-0) 100%);">
@@ -12,7 +12,7 @@
 
         {% if status == "suspended" %}
         <h1 style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;color:var(--text-primary);margin-bottom:var(--sp-3);">Your account is suspended</h1>
-        <p style="color:var(--text-secondary);margin-bottom:var(--sp-5);">This account cannot access AuthFlow right now. If you believe this was a mistake, contact the site administrator and include your username or email.</p>
+        <p style="color:var(--text-secondary);margin-bottom:var(--sp-5);">This account cannot access HaradiBots right now. If you believe this was a mistake, contact the site administrator and include your username or email.</p>
         {% if username or email %}
         <div style="padding:var(--sp-4);background:var(--surface-3);border:1px solid var(--border-subtle);border-radius:var(--r-lg);margin-bottom:var(--sp-5);text-align:left;">
             {% if username %}<div style="color:var(--text-secondary);font-size:var(--text-sm);"><strong style="color:var(--text-primary);">Username:</strong> @{{ username }}</div>{% endif %}
@@ -25,7 +25,7 @@
         </div>
         {% else %}
         <h1 style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:700;color:var(--text-primary);margin-bottom:var(--sp-3);">Account deleted</h1>
-        <p style="color:var(--text-secondary);margin-bottom:var(--sp-5);">This account has been deleted and can no longer be used. You can create a new account if you want to return to AuthFlow.</p>
+        <p style="color:var(--text-secondary);margin-bottom:var(--sp-5);">This account has been deleted and can no longer be used. You can create a new account if you want to return to HaradiBots.</p>
         <div style="display:flex;gap:var(--sp-3);justify-content:center;flex-wrap:wrap;">
             <a class="btn-v2 btn-v2--primary" href="{{ url_for('auth.register') }}">Create Account</a>
             <a class="btn-v2 btn-v2--secondary" href="{{ url_for('auth.login') }}">Sign In</a>

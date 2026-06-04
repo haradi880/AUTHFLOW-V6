@@ -6,9 +6,12 @@ from flask import current_app
 
 from app.utils.uploads import (
     ALLOWED_UPLOAD_FOLDERS,
+    _remove_local_after_cloud_upload,
     allowed_file,
     generate_filename,
+    detect_image_mime,
     resize_image,
+    scan_file_for_virus,
     upload_to_supabase,
     validate_image,
     delete_from_supabase,
@@ -16,6 +19,10 @@ from app.utils.uploads import (
 
 
 DEFAULT_FILES = {"default.jpg", "default_banner.jpg", ""}
+
+
+def _supabase_required():
+    return not current_app.config.get("TESTING") and current_app.config.get("APP_ENV") == "production"
 
 
 def _folder_path(folder):
@@ -73,16 +80,25 @@ def save_upload_secure(file, folder, max_size=(1200, 1200), max_bytes=None):
     try:
         file.save(filepath)
         validate_image(filepath)
+        scan_file_for_virus(filepath)
         resize_image(filepath, max_size)
+        content_type = detect_image_mime(filepath)
         try:
-            upload_to_supabase(filepath, folder, filename, getattr(file, "mimetype", None))
+            uploaded = upload_to_supabase(filepath, folder, filename, content_type)
+            if not uploaded and _supabase_required():
+                raise RuntimeError("Supabase upload storage is not configured.")
         except Exception:
             current_app.logger.exception("Error uploading secure file to Supabase")
+            if _supabase_required():
+                raise
+        _remove_local_after_cloud_upload(filepath, uploaded)
         return filename, None
     except Exception as exc:
         current_app.logger.warning("Secure upload failed for %s: %s", file.filename, exc)
         if filepath.exists():
             filepath.unlink(missing_ok=True)
+        if "Supabase upload storage" in str(exc):
+            return None, str(exc)
         return None, "The uploaded file could not be processed as a valid image."
 
 
@@ -106,11 +122,12 @@ def delete_file_secure(filename, folder):
         current_app.logger.warning("Blocked upload delete outside folder: %s", filename)
         return False
 
+    deleted = False
     if filepath.exists() and filepath.is_file():
         filepath.unlink()
-        try:
-            delete_from_supabase(folder, filename)
-        except Exception:
-            current_app.logger.exception("Error deleting secure file from Supabase")
-        return True
-    return False
+        deleted = True
+    try:
+        deleted = delete_from_supabase(folder, filename) or deleted
+    except Exception:
+        current_app.logger.exception("Error deleting secure file from Supabase")
+    return deleted

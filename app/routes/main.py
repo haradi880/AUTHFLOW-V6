@@ -5,20 +5,26 @@ Main Routes - Home page, profiles, search, settings.
 import base64
 import io
 import secrets
+import threading
+import time
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
-from xml.sax.saxutils import escape
+# Used only to escape generated sitemap XML, not to parse XML.
+from xml.sax.saxutils import escape  # nosec B406
 
 import qrcode
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify, current_app, Response
+from flask import Blueprint, abort, render_template, redirect, url_for, flash, request, session, jsonify, current_app, Response
 from flask_login import current_user, login_required, logout_user
+from PIL import Image, ImageDraw, ImageFont
+from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError, OperationalError
 
 from app.extensions import db
-from app.models import User, Blog, Project, Category, Tag, Notification, Bookmark, Follow, Block, Report, DevLog, RoboticsProject, Job, LoginEvent, LoginSession, DonationIntent, SupportTicket
+from app.models import User, Blog, Project, Category, Tag, Notification, Bookmark, Follow, Block, Report, DevLog, RoboticsProject, Job, LoginEvent, LoginSession, DonationIntent, SupportTicket, DeletedContent
 from app.services.auth import issue_otp, normalize_email, validate_password_strength, verify_otp
 from app.services.gamification import maybe_award_profile_completion
 from app.services.notifications import create_notification
+from app.services.search import search_all
 from app.services.security import revoke_all_sessions, revoke_other_sessions, revoke_session
 from app.utils.audit import AuditEventType, audit_log, get_client_ip
 from app.utils.rate_limit import rate_limit
@@ -27,6 +33,7 @@ from app.utils.uploads import save_upload, delete_file
 
 # Create the blueprint
 main_bp = Blueprint('main', __name__)
+_sitemap_cache = {"expires_at": 0, "xml": None}
 
 
 # ============================================================
@@ -126,6 +133,51 @@ def profile_completion_tips(user):
     return [message for passed, message in checks if not passed][:4]
 
 
+@main_bp.get("/dashboard/content")
+@login_required
+def content_manager():
+    """Manage the current user's published, draft, and recoverable blog posts."""
+    tab = request.args.get("tab", "all")
+    page = request.args.get("page", 1, type=int)
+    stats = {
+        "all": Blog.query.filter_by(user_id=current_user.id).count(),
+        "published": Blog.query.filter_by(user_id=current_user.id, status="published").count(),
+        "draft": Blog.query.filter_by(user_id=current_user.id, status="draft").count(),
+        "deleted": DeletedContent.query.filter_by(content_type="blog", deleted_by_id=current_user.id, recovered=False).count(),
+    }
+
+    if tab == "deleted":
+        query = DeletedContent.query.filter_by(content_type="blog", deleted_by_id=current_user.id, recovered=False).order_by(DeletedContent.deleted_at.desc())
+        pagination = query.paginate(page=page, per_page=12, error_out=False)
+        return render_template("dashboard/content.html", tab=tab, stats=stats, blogs=[], deleted_items=pagination.items, pagination=pagination)
+
+    query = Blog.query.filter_by(user_id=current_user.id)
+    if tab == "published":
+        query = query.filter_by(status="published")
+    elif tab == "draft":
+        query = query.filter_by(status="draft")
+    else:
+        tab = "all"
+    pagination = query.order_by(Blog.updated_at.desc()).paginate(page=page, per_page=12, error_out=False)
+    return render_template("dashboard/content.html", tab=tab, stats=stats, blogs=pagination.items, deleted_items=[], pagination=pagination)
+
+
+@main_bp.post("/dashboard/content/deleted/<int:archive_id>/restore")
+@login_required
+def restore_blog_archive(archive_id):
+    from app.utils.soft_delete import restore_deleted_content
+
+    archive = db.get_or_404(DeletedContent, archive_id)
+    if archive.content_type != "blog" or (archive.deleted_by_id != current_user.id and not current_user.is_admin):
+        abort(404)
+    restored = restore_deleted_content(archive.id, user_id=current_user.id)
+    if restored:
+        flash("Blog restored. Review it before publishing again.", "success")
+        return redirect(url_for("blog.edit_blog", blog_id=restored.id))
+    flash("Blog could not be restored. It may be expired or already recovered.", "error")
+    return redirect(url_for("main.content_manager", tab="deleted"))
+
+
 # ============================================================
 # PUBLIC PROFILE
 # ============================================================
@@ -181,32 +233,30 @@ def public_profile(username):
         'github': user.github
     }
     
-    # Get followers and following counts
-    followers_count = user.followers_count()
-    following_count = user.following_count()
-    blogs_count = Blog.query.filter_by(user_id=user.id, status='published').count()
-    projects_count = Project.query.filter_by(user_id=user.id, status='published').count()
-    total_views = db.session.query(db.func.coalesce(db.func.sum(Blog.views_count), 0)).filter_by(
-        user_id=user.id,
-        status='published'
-    ).scalar()
-    total_likes = db.session.query(db.func.coalesce(db.func.sum(Blog.likes_count), 0)).filter_by(
-        user_id=user.id,
-        status='published'
-    ).scalar()
-    featured_blog = None
-    if user.featured_blog_id:
-        featured_blog = Blog.query.filter_by(id=user.featured_blog_id, user_id=user.id, status='published').first()
-    if not featured_blog:
-        featured_blog = Blog.query.filter_by(user_id=user.id, status='published')\
-            .order_by(Blog.likes_count.desc(), Blog.views_count.desc(), Blog.created_at.desc()).first()
+    follower_count_sq = db.session.query(db.func.count(Follow.id)).filter(Follow.followed_id == user.id).scalar_subquery()
+    following_count_sq = db.session.query(db.func.count(Follow.id)).filter(Follow.follower_id == user.id).scalar_subquery()
+    followers_count, following_count = db.session.query(follower_count_sq, following_count_sq).one()
 
-    featured_project = None
-    if user.featured_project_id:
-        featured_project = Project.query.filter_by(id=user.featured_project_id, user_id=user.id, status='published').first()
-    if not featured_project:
-        featured_project = Project.query.filter_by(user_id=user.id, status='published')\
-            .order_by(Project.stars_count.desc(), Project.created_at.desc()).first()
+    blogs_count = len(blogs)
+    projects_count = len(projects)
+    total_views = sum((blog.views_count or 0) for blog in blogs)
+    total_likes = sum((blog.likes_count or 0) for blog in blogs)
+
+    blogs_by_id = {blog.id: blog for blog in blogs}
+    featured_blog = blogs_by_id.get(user.featured_blog_id) if user.featured_blog_id else None
+    if not featured_blog and blogs:
+        featured_blog = max(
+            blogs,
+            key=lambda blog: (blog.likes_count or 0, blog.views_count or 0, blog.created_at or datetime.min),
+        )
+
+    projects_by_id = {project.id: project for project in projects}
+    featured_project = projects_by_id.get(user.featured_project_id) if user.featured_project_id else None
+    if not featured_project and projects:
+        featured_project = max(
+            projects,
+            key=lambda project: (project.stars_count or 0, project.created_at or datetime.min),
+        )
     
     # Create a profile-like object with all needed data
     profile_data = {
@@ -218,8 +268,8 @@ def public_profile(username):
         'location': user.location,
         'website': user.website,
         'resume_url': user.resume_url,
-        'avatar_url': url_for('uploaded_file', folder='avatars', filename=user.avatar) if user.avatar else '',
-        'banner_url': url_for('uploaded_file', folder='banners', filename=user.banner) if user.banner else '',
+        'avatar_url': user.avatar_url,
+        'banner_url': user.banner_url,
         'skills': skills_list,
         'open_to_work': user.open_to_work,
         'availability_status': user.availability_status,
@@ -265,6 +315,7 @@ def public_profile(username):
 
 @main_bp.route('/profile/edit', methods=['GET', 'POST'])
 @login_required
+@rate_limit(max_calls=20, window_seconds=300, scope="profile-edit")
 def edit_profile():
     """Edit current user's profile."""
     
@@ -303,23 +354,21 @@ def edit_profile():
         if 'avatar' in request.files:
             file = request.files['avatar']
             if file and file.filename:
-                # Delete old avatar if not default
-                delete_file(user.avatar, 'avatars')
-                # Save new avatar
+                old_avatar = user.avatar
                 filename = save_upload(file, 'avatars', max_size=(400, 400))
                 if filename:
                     user.avatar = filename
+                    delete_file(old_avatar, 'avatars')
         
         # Handle banner upload
         if 'banner' in request.files:
             file = request.files['banner']
             if file and file.filename:
-                # Delete old banner
-                delete_file(user.banner, 'banners')
-                # Save new banner
+                old_banner = user.banner
                 filename = save_upload(file, 'banners', max_size=(1200, 400))
                 if filename:
                     user.banner = filename
+                    delete_file(old_banner, 'banners')
         
         db.session.commit()
         maybe_award_profile_completion(user)
@@ -433,13 +482,114 @@ def healthz():
     return jsonify({"ok": True, "status": "healthy"})
 
 
+@main_bp.get('/readyz')
+def readyz():
+    checks = {}
+    ready = True
+
+    cache = current_app.extensions.setdefault("readiness_cache", {"database": None})
+    cache_lock = current_app.extensions.setdefault("readiness_cache_lock", threading.Lock())
+    now = time.time()
+    ttl = max(0.0, float(current_app.config.get("READINESS_CACHE_SECONDS") or 0))
+    with cache_lock:
+        cached_database = cache.get("database")
+        if cached_database and cached_database.get("expires_at", 0) > time.time():
+            checks["database"] = {
+                "ok": cached_database["ok"],
+                "cached": True,
+                "checked_at": cached_database["checked_at"],
+            }
+        else:
+            started = time.perf_counter()
+            checked_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+            try:
+                db.session.execute(text("SELECT 1"))
+                duration_ms = round((time.perf_counter() - started) * 1000, 2)
+                checks["database"] = {"ok": True, "cached": False, "duration_ms": duration_ms, "checked_at": checked_at}
+                cache["database"] = {
+                    "ok": True,
+                    "checked_at": checked_at,
+                    "expires_at": time.time() + ttl,
+                }
+            except Exception as exc:
+                db.session.rollback()
+                ready = False
+                cache["database"] = None
+                checks["database"] = {"ok": False, "cached": False, "error": exc.__class__.__name__, "checked_at": checked_at}
+
+    if current_app.config.get("APP_ENV") == "production":
+        from app.services.production_checks import run_production_checks
+
+        production_checks = run_production_checks(current_app.config)
+        failed_checks = [check.key for check in production_checks if check.status == "fail"]
+        checks["production_config"] = {"ok": not failed_checks, "failures": failed_checks}
+        if failed_checks:
+            ready = False
+
+    return jsonify({"ok": ready, "status": "ready" if ready else "not_ready", "checks": checks}), 200 if ready else 503
+
+
+@main_bp.get('/metrics')
+def metrics():
+    token = current_app.config.get("METRICS_TOKEN")
+    if token:
+        bearer = request.headers.get("Authorization") == f"Bearer {token}"
+        query_token = request.args.get("token") == token
+        if not bearer and not query_token:
+            abort(403)
+
+    from app.services.observability import metrics_text
+
+    return Response(metrics_text(current_app.config.get("APP_NAME", "HaradiBots")), mimetype="text/plain; version=0.0.4")
+
+
+@main_bp.get('/og/haradibots.png')
+def social_card():
+    """Generated default social preview image for pages without uploaded media."""
+    width, height = 1200, 630
+    image = Image.new("RGB", (width, height), "#0b1120")
+    draw = ImageDraw.Draw(image)
+
+    draw.rectangle((0, 0, width, height), fill="#0b1120")
+    draw.rectangle((0, height - 18, width, height), fill="#6366f1")
+    draw.rectangle((0, height - 34, width, height - 18), fill="#10b981")
+    draw.rectangle((0, height - 50, width, height - 34), fill="#a855f7")
+    draw.rectangle((72, 72, width - 72, height - 72), outline="#334155", width=2)
+    draw.rectangle((88, 88, 240, 240), fill="#111827", outline="#6366f1", width=4)
+
+    def font(size, bold=False):
+        names = ["DejaVuSans-Bold.ttf", "Arial Bold.ttf"] if bold else ["DejaVuSans.ttf", "Arial.ttf"]
+        for name in names:
+            try:
+                return ImageFont.truetype(name, size=size)
+            except OSError:
+                continue
+        return ImageFont.load_default()
+
+    draw.text((126, 112), "H", font=font(88, bold=True), fill="#f8fafc")
+    draw.text((280, 134), "HaradiBots", font=font(86, bold=True), fill="#f8fafc")
+    draw.text((284, 238), "Developer portfolios, projects, blogs, hiring, and robotics work.", font=font(34), fill="#cbd5e1")
+    draw.text((284, 308), "Build. Share. Get discovered.", font=font(42, bold=True), fill="#10b981")
+
+    for index, label in enumerate(("Projects", "Blogs", "Profiles", "Jobs")):
+        x = 284 + index * 190
+        draw.rounded_rectangle((x, 420, x + 150, 476), radius=18, fill="#1e293b", outline="#475569", width=1)
+        draw.text((x + 22, 432), label, font=font(24, bold=True), fill="#e2e8f0")
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    response = Response(buffer.getvalue(), mimetype="image/png")
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
+
+
 # ============================================================
 # SEO & Static Files (robots, sitemap)
 # ============================================================
 @main_bp.route('/robots.txt')
 def robots_txt():
     """Serve a simple robots.txt pointing to the sitemap."""
-    sitemap_url = (current_app.config.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/') + url_for('main.sitemap')
+    sitemap_url = (current_app.config.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/') + url_for('main.sitemap_index')
     lines = [
         "User-agent: *",
         "Disallow:",
@@ -448,12 +598,32 @@ def robots_txt():
     return Response("\n".join(lines), mimetype="text/plain")
 
 
+@main_bp.route('/sitemap-index.xml')
+def sitemap_index():
+    base = (current_app.config.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/')
+    sitemap_url = base + url_for('main.sitemap')
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    xml += f'  <sitemap>\n    <loc>{escape(sitemap_url)}</loc>\n  </sitemap>\n'
+    xml += '</sitemapindex>'
+    return Response(xml, mimetype='application/xml')
+
+
 @main_bp.route('/sitemap.xml')
 def sitemap():
     """Return a sitemap with public static and dynamic content URLs.
 
     This is intentionally conservative — add more dynamic URLs if needed.
     """
+    ttl = int(current_app.config.get('SITEMAP_CACHE_SECONDS', 600))
+    now = time.time()
+    cached_xml = _sitemap_cache.get("xml")
+    cache_enabled = not current_app.config.get("TESTING") and ttl > 0
+    if cache_enabled and cached_xml and now < float(_sitemap_cache.get("expires_at") or 0):
+        response = Response(cached_xml, mimetype='application/xml')
+        response.headers["Cache-Control"] = f"public, max-age={ttl}"
+        return response
+
     base = (current_app.config.get('PUBLIC_BASE_URL') or request.host_url).rstrip('/')
     paths = [
         {'loc': url_for('main.home'), 'changefreq': 'daily', 'priority': '1.0'},
@@ -513,7 +683,13 @@ def sitemap():
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
     xml += '\n'.join(url_elements)
     xml += '\n</urlset>'
-    return Response(xml, mimetype='application/xml')
+    if cache_enabled:
+        _sitemap_cache["xml"] = xml
+        _sitemap_cache["expires_at"] = now + ttl
+    response = Response(xml, mimetype='application/xml')
+    if cache_enabled:
+        response.headers["Cache-Control"] = f"public, max-age={ttl}"
+    return response
 
 
 @main_bp.route('/api/generate-qr', methods=['POST'])
@@ -796,62 +972,31 @@ def block_user(username):
 # ============================================================
 
 @main_bp.route('/search')
+@rate_limit(max_calls=60, window_seconds=60, scope="search", methods={"GET"})
 def search():
     """Search blogs, projects, and users."""
     
     query = request.args.get('q', '').strip()
-    page = request.args.get('page', 1, type=int)
-    
-    blogs = []
-    projects = []
-    users = []
-    total_results = 0
-    
-    if query:
-        pattern = f'%{query}%'
-        # Search blogs by title or content
-        blogs = Blog.query.filter(
-            Blog.status == 'published',
-            db.or_(
-                Blog.title.ilike(pattern),
-                Blog.content.ilike(pattern),
-                Blog.excerpt.ilike(pattern),
-                Blog.tags.any(Tag.name.ilike(pattern))
-            )
-        ).order_by(Blog.likes_count.desc(), Blog.views_count.desc(), Blog.created_at.desc()).limit(10).all()
-        
-        # Search projects by title or description
-        projects = Project.query.filter(
-            Project.status == 'published',
-            db.or_(
-                Project.title.ilike(pattern),
-                Project.description.ilike(pattern),
-                Project.tags.any(Tag.name.ilike(pattern))
-            )
-        ).order_by(Project.stars_count.desc(), Project.created_at.desc()).limit(10).all()
-        
-        # Search users by username or full name
-        users = User.query.filter(
-            User.active.is_(True),
-            db.or_(
-                User.username.ilike(pattern),
-                User.full_name.ilike(pattern),
-                User.headline.ilike(pattern),
-                User.skills.ilike(pattern)
-            )
-        ).limit(10).all()
-        
-        total_results = len(blogs) + len(projects) + len(users)
+    results = search_all(query, limit=10)
+    blogs = results["blogs"]
+    projects = results["projects"]
+    jobs = results["jobs"]
+    users = results["users"]
+    tags = results["tags"]
+    total_results = sum(len(results[key]) for key in results)
     
     return render_template('feed/search_results.html',
                          query=query,
                          blogs=blogs,
                          projects=projects,
+                         jobs=jobs,
                          users=users,
+                         tags=tags,
                          total_results=total_results)
 
 
 @main_bp.get('/tags/suggest')
+@rate_limit(max_calls=60, window_seconds=60, scope="tag-suggest", methods={"GET"})
 def suggest_tags():
     query = request.args.get('q', '').strip()
     tag_query = Tag.query

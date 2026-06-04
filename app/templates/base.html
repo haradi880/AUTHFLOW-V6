@@ -3,19 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="description" content="{% block meta_desc %}AuthFlow — Developer ecosystem for creators, builders, and robotics engineers{% endblock %}">
-    <meta name="robots" content="index,follow">
-    <link rel="canonical" href="{% block canonical_url %}{{ request.base_url }}{% endblock %}">
-    <link rel="sitemap" type="application/xml" title="Sitemap" href="{{ url_for('main.sitemap', _external=True) }}">
-    <meta property="og:site_name" content="{{ config.APP_NAME or 'AuthFlow' }}">
+    {% set page_csrf_token = csrf_token() if csrf_required else '' %}
+    {% if page_csrf_token %}<meta name="csrf-token" content="{{ page_csrf_token }}">{% endif %}
+    <meta name="description" content="{% block meta_desc %}HaradiBots - Developer ecosystem for creators, builders, and robotics engineers{% endblock %}">
+    <meta name="robots" content="{% block robots %}index,follow{% endblock %}">
+    <link rel="canonical" href="{% block canonical_url %}{{ current_public_url() }}{% endblock %}">
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="{{ public_url_for('main.sitemap_index') }}">
+    {% set page_og_image_url %}{% block og_image %}{% endblock %}{% endset %}
+    {% set og_image_url = page_og_image_url|trim or default_og_image_url %}
+    <meta property="og:site_name" content="{{ config.APP_NAME or 'HaradiBots' }}">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
-    <meta property="og:title" content="{% block og_title %}{% block title %}AuthFlow{% endblock %}{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{% block title %}HaradiBots{% endblock %}{% endblock %}">
     <meta property="og:description" content="{% block og_desc %}{{ self.meta_desc() }}{% endblock %}">
     <meta property="og:url" content="{{ self.canonical_url() }}">
+    {% if og_image_url|trim %}<meta property="og:image" content="{{ og_image_url|trim }}">{% endif %}
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ self.og_title() }}">
     <meta name="twitter:description" content="{{ self.og_desc() }}">
+    {% if og_image_url|trim %}<meta name="twitter:image" content="{{ og_image_url|trim }}">{% endif %}
+    {% block meta %}{% endblock %}
+    {% block structured_data %}{% endblock %}
     <title>{{ self.title() }}</title>
 
     <!-- Fonts -->
@@ -110,27 +117,34 @@
             } catch (e) {}
         }
         {% if current_user.is_authenticated %}
-        setInterval(checkGlobalActivity, 8000);
+        const activityPollMs = 30000;
+        setInterval(() => {
+            if (!document.hidden) checkGlobalActivity();
+        }, activityPollMs);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) checkGlobalActivity();
+        });
         {% endif %}
     </script>
     <script>
-        window.AuthFlow = window.AuthFlow || {};
-        window.AuthFlow.csrfToken = "{{ csrf_token() }}";
+        window.HaradiBots = window.HaradiBots || {};
+        window.AuthFlow = window.HaradiBots;
+        window.HaradiBots.csrfToken = {{ page_csrf_token|tojson }};
         document.addEventListener('submit', function (event) {
             const form = event.target;
-            if (!form || form.method.toLowerCase() !== 'post' || form.querySelector('input[name="_csrf_token"]')) return;
+            if (!window.HaradiBots.csrfToken || !form || form.method.toLowerCase() !== 'post' || form.querySelector('input[name="_csrf_token"]')) return;
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = '_csrf_token';
-            input.value = window.AuthFlow.csrfToken;
+            input.value = window.HaradiBots.csrfToken;
             form.appendChild(input);
         }, true);
         const originalFetch = window.fetch;
         window.fetch = function (resource, options) {
             options = options || {};
             const method = (options.method || 'GET').toUpperCase();
-            if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
-                options.headers = Object.assign({'X-CSRFToken': window.AuthFlow.csrfToken}, options.headers || {});
+            if (window.HaradiBots.csrfToken && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+                options.headers = Object.assign({'X-CSRFToken': window.HaradiBots.csrfToken}, options.headers || {});
             }
             return originalFetch(resource, options);
         };
@@ -143,14 +157,14 @@
                 });
             }
             const cookieBanner = document.getElementById('cookieBanner');
-            const consent = localStorage.getItem('authflow_cookie_consent');
+            const consent = localStorage.getItem('haradibots_cookie_consent');
             if (cookieBanner && !consent) cookieBanner.hidden = false;
             document.getElementById('acceptOptionalCookies')?.addEventListener('click', function () {
-                localStorage.setItem('authflow_cookie_consent', 'optional');
+                localStorage.setItem('haradibots_cookie_consent', 'optional');
                 cookieBanner.hidden = true;
             });
             document.getElementById('rejectOptionalCookies')?.addEventListener('click', function () {
-                localStorage.setItem('authflow_cookie_consent', 'essential');
+                localStorage.setItem('haradibots_cookie_consent', 'essential');
                 cookieBanner.hidden = true;
             });
 

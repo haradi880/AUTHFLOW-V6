@@ -4,13 +4,18 @@ services:
     env_file: .env
     environment:
       APP_ENV: production
-      DATABASE_URL: postgresql://authflow:authflow@postgres:5432/authflow
+      DATABASE_URL: postgresql://${POSTGRES_USER:-haradibots}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-haradibots}
+      REDIS_URL: redis://redis:6379/0
       RATELIMIT_STORAGE_URI: redis://redis:6379/0
+      METRICS_TOKEN: ${METRICS_TOKEN:-change-me-metrics-token}
+      UPLOAD_KEEP_LOCAL: "false"
+      MAX_CONTENT_LENGTH: "26214400"
+      MAX_UPLOAD_BYTES: "26214400"
+      MESSAGE_ATTACHMENT_MAX_BYTES: "26214400"
     depends_on:
       - postgres
       - redis
     volumes:
-      - uploads:/app/uploads
       - logs:/app/logs
     restart: unless-stopped
 
@@ -19,15 +24,20 @@ services:
     env_file: .env
     environment:
       APP_ENV: production
-      DATABASE_URL: postgresql://authflow:authflow@postgres:5432/authflow
+      DATABASE_URL: postgresql://${POSTGRES_USER:-haradibots}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-haradibots}
       REDIS_URL: redis://redis:6379/0
+      RATELIMIT_STORAGE_URI: redis://redis:6379/0
       TASK_QUEUE_ASYNC: "true"
+      METRICS_TOKEN: ${METRICS_TOKEN:-change-me-metrics-token}
+      UPLOAD_KEEP_LOCAL: "false"
+      MAX_CONTENT_LENGTH: "26214400"
+      MAX_UPLOAD_BYTES: "26214400"
+      MESSAGE_ATTACHMENT_MAX_BYTES: "26214400"
     command: ["rq", "worker", "-u", "redis://redis:6379/0", "default", "notifications", "maintenance"]
     depends_on:
       - postgres
       - redis
     volumes:
-      - uploads:/app/uploads
       - logs:/app/logs
     restart: unless-stopped
 
@@ -39,15 +49,14 @@ services:
       - "80:80"
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - uploads:/app/uploads:ro
     restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: authflow
-      POSTGRES_USER: authflow
-      POSTGRES_PASSWORD: authflow
+      POSTGRES_DB: ${POSTGRES_DB:-haradibots}
+      POSTGRES_USER: ${POSTGRES_USER:-haradibots}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -62,5 +71,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  uploads:
   logs:

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Leaderboard — AuthFlow{% endblock %}
-{% block meta_desc %}See top AuthFlow contributors ranked by XP, reputation, projects, writing, and community activity.{% endblock %}
+{% block title %}Leaderboard — HaradiBots{% endblock %}
+{% block meta_desc %}See top HaradiBots contributors ranked by XP, reputation, projects, writing, and community activity.{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
 
 {% block content %}
@@ -32,7 +32,7 @@
                     {% for idx in [1,0,2] %}
                     {% set u = users.items[idx] %}
                     <div style="text-align:center;{% if idx == 0 %}order:2;{% elif idx == 1 %}order:1;{% else %}order:3;{% endif %}">
-                        <div class="avatar-v2 {{ 'avatar-v2--2xl' if idx == 0 else 'avatar-v2--xl' }} avatar-v2--ring" style="margin:0 auto var(--sp-3);{% if idx == 0 %}box-shadow:0 0 24px rgba(245,158,11,.3);{% endif %}">{{ u.username[0]|upper }}</div>
+                        {{ user_avatar(u, 'avatar-v2 ' ~ ('avatar-v2--2xl' if idx == 0 else 'avatar-v2--xl') ~ ' avatar-v2--ring', 'margin:0 auto var(--sp-3);' ~ ('box-shadow:0 0 24px rgba(245,158,11,.3);' if idx == 0 else '')) }}
                         <div style="font-size:{% if idx == 0 %}1.5rem{% else %}1.2rem{% endif %};margin-bottom:var(--sp-1);">{% if idx == 0 %}🥇{% elif idx == 1 %}🥈{% else %}🥉{% endif %}</div>
                         <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);">{{ u.full_name or u.username }}</div>
                         <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ u.username }}</div>
@@ -49,7 +49,7 @@
                     {% for user in users.items %}
                     <a href="/{{ user.username }}" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border-subtle);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
                         <span style="width:32px;font-family:var(--font-display);font-weight:700;font-size:var(--text-sm);color:{% if loop.index <= 3 %}var(--warning){% else %}var(--text-faint){% endif %};text-align:center;">#{{ (users.page - 1) * users.per_page + loop.index }}</span>
-                        <div class="avatar-v2 avatar-v2--sm">{{ user.username[0]|upper }}</div>
+                        {{ user_avatar(user, 'avatar-v2 avatar-v2--sm') }}
                         <div style="flex:1;min-width:0;">
                             <span style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</span>
                             <span style="font-size:var(--text-xs);color:var(--text-muted);margin-left:var(--sp-2);">@{{ user.username }}</span>

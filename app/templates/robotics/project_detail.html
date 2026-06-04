@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{ project.title }} — Robotics Hub — AuthFlow{% endblock %}
+{% block title %}{{ project.title }} — Robotics Hub — HaradiBots{% endblock %}
 {% block meta_desc %}{{ project.description|striptags|truncate(155, true, '') }}{% endblock %}
-{% block canonical_url %}{{ url_for('robotics.project_detail', slug=project.slug, _external=True) }}{% endblock %}
+{% block canonical_url %}{{ public_url_for('robotics.project_detail', slug=project.slug) }}{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
 
 {% block content %}
@@ -45,7 +45,7 @@
 
                 <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-6);">
                     <a href="/{{ project.author.username }}" style="display:flex;align-items:center;gap:var(--sp-2);text-decoration:none;">
-                        <div class="avatar-v2 avatar-v2--sm">{{ project.author.username[0]|upper }}</div>
+                        {{ user_avatar(project.author, 'avatar-v2 avatar-v2--sm') }}
                         <span style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">@{{ project.author.username }}</span>
                     </a>
                     <span style="font-size:var(--text-xs);color:var(--text-faint);">{{ project.created_at.strftime('%b %d, %Y') }}</span>

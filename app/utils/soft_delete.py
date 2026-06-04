@@ -2,44 +2,21 @@
 Soft Delete System - Enables content recovery and audit trails.
 """
 
-import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
-from sqlalchemy.orm import declarative_mixin, declared_attr
 from flask import current_app
 
 from app.extensions import db
+from app.models import Blog, DeletedContent, DevLog, Project
 from app.utils.audit import audit_log, AuditEventType
 
 
-class DeletedContent(db.Model):
-    """Archive for deleted content with recovery capability."""
-    
-    __tablename__ = "deleted_content_archive"
-    
-    id = db.Column(db.Integer, primary_key=True)
-    content_type = db.Column(db.String(50), nullable=False, index=True)  # blog, project, comment, etc.
-    content_id = db.Column(db.Integer, nullable=False, index=True)
-    deleted_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
-    deleted_by_username = db.Column(db.String(50))
-    content_data = db.Column(db.JSON, nullable=False)  # Full serialized content
-    reason = db.Column(db.String(255))  # Deletion reason
-    deleted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    expires_at = db.Column(db.DateTime, index=True)  # When recovery is no longer possible (30 days default)
-    recovered = db.Column(db.Boolean, default=False, nullable=False)
-    recovered_at = db.Column(db.DateTime)
-    recovered_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"))
-    
-    deleted_by = db.relationship("User", foreign_keys=[deleted_by_id], backref=db.backref("deleted_content", lazy="dynamic"))
-    recovered_by = db.relationship("User", foreign_keys=[recovered_by_id])
-    
-    def __repr__(self):
-        return f"<DeletedContent {self.content_type}:{self.content_id} at {self.deleted_at}>"
-    
-    def can_recover(self) -> bool:
-        """Check if content can still be recovered."""
-        return not self.recovered and self.expires_at > datetime.utcnow()
+RESTORABLE_MODELS = {
+    "blog": Blog,
+    "project": Project,
+    "devlog": DevLog,
+}
 
 
 def serialize_model(obj) -> Dict[str, Any]:
@@ -54,6 +31,39 @@ def serialize_model(obj) -> Dict[str, Any]:
         else:
             result[column.name] = value
     return result
+
+
+def _deserialize_value(column, value):
+    if value is None:
+        return None
+    try:
+        python_type = column.type.python_type
+    except NotImplementedError:
+        python_type = None
+    if python_type is datetime and isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return value
+
+
+def _restore_model(archive: DeletedContent):
+    model = RESTORABLE_MODELS.get(archive.content_type)
+    if model is None:
+        return archive.content_data.copy()
+
+    content_data = archive.content_data.copy()
+    content_data.pop("id", None)
+    allowed_columns = {column.name: column for column in model.__table__.columns if column.name != "id"}
+    values = {
+        name: _deserialize_value(column, content_data[name])
+        for name, column in allowed_columns.items()
+        if name in content_data
+    }
+    restored = model(**values)
+    db.session.add(restored)
+    return restored
 
 
 def soft_delete(
@@ -81,7 +91,7 @@ def soft_delete(
         actor_username = None
         if user_id:
             from app.models import User
-            user = User.query.get(user_id)
+            user = db.session.get(User, user_id)
             if user:
                 actor_username = user.username
         
@@ -119,6 +129,7 @@ def soft_delete(
         
         return True
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Soft delete failed: {e}")
         return False
 
@@ -135,7 +146,7 @@ def restore_deleted_content(archive_id: int, user_id: int = None) -> Optional[An
         The restored object, or None if restoration failed
     """
     try:
-        archive = DeletedContent.query.get_or_404(archive_id)
+        archive = db.get_or_404(DeletedContent, archive_id)
         
         if archive.recovered:
             raise ValueError("Content has already been recovered")
@@ -143,16 +154,13 @@ def restore_deleted_content(archive_id: int, user_id: int = None) -> Optional[An
         if not archive.can_recover():
             raise ValueError("Recovery period has expired")
         
-        # Recreate the object from archive
-        # This is simplified - in production, you'd have model-specific restoration logic
-        content_data = archive.content_data.copy()
-        content_data.pop('id', None)  # Remove ID to create new instance
+        restored = _restore_model(archive)
         
         # Log restoration
         actor_username = None
         if user_id:
             from app.models import User
-            user = User.query.get(user_id)
+            user = db.session.get(User, user_id)
             if user:
                 actor_username = user.username
         
@@ -171,8 +179,9 @@ def restore_deleted_content(archive_id: int, user_id: int = None) -> Optional[An
         archive.recovered_by_id = user_id
         db.session.commit()
         
-        return content_data
+        return restored
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Content restoration failed: {e}")
         return None
 
@@ -187,5 +196,6 @@ def cleanup_expired_archives():
         current_app.logger.info(f"Cleaned up {expired} expired archive entries")
         return expired
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Archive cleanup failed: {e}")
         return 0

@@ -1,5 +1,5 @@
 /* =====================================================
-   AUTHFLOW DESIGN SYSTEM v2.0
+   HaradiBots DESIGN SYSTEM v2.0
    Premium Developer Ecosystem Theme
    ===================================================== */
 
@@ -280,6 +280,7 @@
 .avatar-v2 img { width: 100%; height: 100%; object-fit: cover; }
 .avatar-v2--xs { width: 24px; height: 24px; font-size: var(--text-2xs); }
 .avatar-v2--sm { width: 32px; height: 32px; font-size: var(--text-xs); }
+.avatar-v2--md { width: 40px; height: 40px; font-size: var(--text-sm); }
 .avatar-v2--lg { width: 56px; height: 56px; font-size: var(--text-lg); }
 .avatar-v2--xl { width: 72px; height: 72px; font-size: var(--text-xl); }
 .avatar-v2--2xl { width: 96px; height: 96px; font-size: var(--text-3xl); }

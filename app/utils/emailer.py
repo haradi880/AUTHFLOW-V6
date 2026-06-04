@@ -1,6 +1,5 @@
 """Email delivery helpers with SMTP and API fallbacks."""
 
-import json
 import re
 import smtplib
 import socket
@@ -9,9 +8,8 @@ from datetime import datetime
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
+import requests
 from flask import current_app
 
 
@@ -55,7 +53,7 @@ def _sender_email(sender):
 
 def _sender_name(sender):
     name, _ = parseaddr(sender or "")
-    return name or current_app.config.get("MAIL_SENDER_NAME", "AuthFlow")
+    return name or current_app.config.get("MAIL_SENDER_NAME", "HaradiBots")
 
 
 def _format_sender(sender):
@@ -63,7 +61,7 @@ def _format_sender(sender):
     if name and email:
         return sender
     sender = sender or current_app.config.get("MAIL_DEFAULT_SENDER") or "noreply@example.com"
-    return formataddr((current_app.config.get("MAIL_SENDER_NAME", "AuthFlow"), sender))
+    return formataddr((current_app.config.get("MAIL_SENDER_NAME", "HaradiBots"), sender))
 
 
 def _build_message(to_email, subject, body, html_body=None, sender=None):
@@ -122,22 +120,20 @@ def _send_smtp(msg, settings):
 
 
 def _post_json(url, payload, headers, timeout, accepted_statuses):
-    request = Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", **headers},
-        method="POST",
-    )
+    request_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": f"{current_app.config.get('APP_NAME', 'HaradiBots')}/1.0 emailer",
+        **headers,
+    }
     try:
-        with urlopen(request, timeout=timeout) as response:
-            if response.status not in accepted_statuses:
-                detail = response.read(500).decode("utf-8", errors="replace")
-                raise EmailDeliveryError(f"HTTP {response.status}: {detail}")
-    except HTTPError as exc:
-        detail = exc.read(500).decode("utf-8", errors="replace")
-        raise EmailDeliveryError(f"HTTP {exc.code}: {detail}") from exc
-    except URLError as exc:
-        raise EmailDeliveryError(str(exc.reason)) from exc
+        response = requests.post(url, json=payload, headers=request_headers, timeout=timeout)
+    except requests.RequestException as exc:
+        raise EmailDeliveryError(str(exc)) from exc
+
+    if response.status_code not in accepted_statuses:
+        detail = response.text[:500]
+        raise EmailDeliveryError(f"HTTP {response.status_code}: {detail}") from None
 
 
 def _send_resend(to_email, subject, body, html_body=None):
@@ -253,7 +249,7 @@ def send_email(to_email, subject, body, html_body=None):
 
 def send_otp_email(email, otp):
     """Send OTP verification code to user's email."""
-    app_name = current_app.config.get("APP_NAME", "AUTHFLOW")
+    app_name = current_app.config.get("APP_NAME", "HaradiBots")
     subject = f"Your Verification Code - {app_name}"
     body = f"""
 Hello!
@@ -272,7 +268,7 @@ Best regards,
 
 def send_welcome_email(email, username):
     """Send welcome email to new users."""
-    app_name = current_app.config.get("APP_NAME", "AUTHFLOW")
+    app_name = current_app.config.get("APP_NAME", "HaradiBots")
     site_url = current_app.config.get("PUBLIC_BASE_URL", "https://haradibots.onrender.com")
     subject = f"Welcome to {app_name}!"
     body = f"""

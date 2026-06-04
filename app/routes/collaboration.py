@@ -80,7 +80,7 @@ def team_detail(slug):
 @login_required
 @rate_limit(max_calls=25, window_seconds=600, scope="team-invites")
 def invite_to_team(team_id):
-    team = Team.query.get_or_404(team_id)
+    team = db.get_or_404(Team, team_id)
     if not team.can_manage(current_user):
         abort(403)
     username_or_email = request.form.get("user", "").strip()
@@ -121,7 +121,7 @@ def invite_to_team(team_id):
 @collaboration_bp.post("/collaboration/invitations/<int:invitation_id>/<decision>")
 @login_required
 def respond_invitation(invitation_id, decision):
-    invitation = TeamInvitation.query.get_or_404(invitation_id)
+    invitation = db.get_or_404(TeamInvitation, invitation_id)
     if invitation.invitee_id != current_user.id:
         abort(403)
     if invitation.status != "pending" or decision not in {"accept", "decline"}:
@@ -179,7 +179,7 @@ def create_request():
 @collaboration_bp.post("/collaboration/requests/<int:request_id>/<decision>")
 @login_required
 def respond_request(request_id, decision):
-    collab = CollaborationRequest.query.get_or_404(request_id)
+    collab = db.get_or_404(CollaborationRequest, request_id)
     if collab.recipient_id != current_user.id:
         abort(403)
     if collab.status != "pending" or decision not in {"accept", "decline"}:

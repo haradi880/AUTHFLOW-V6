@@ -8,7 +8,7 @@
 - Collaboration was represented indirectly through messages/projects, but there were no team workspaces, invitations, request lifecycle, activity stream, or role checks.
 - Job browsing used a visually heavy layout with broken encoded symbols, limited search scope, weak mobile ergonomics, and no obvious application tracking path.
 - Hiring queries lacked composite indexes for the common filters: status, category, type, work mode, company, and application status.
-- Security foundations existed: CSRF, rate limiting, secure headers, login lockout, password hashing, email verification/reset flows, cookie consent copy, and audit logging. The remaining production work is operational hardening: Redis-backed rate limits, monitored async jobs, CSP tightening, data export/deletion workflows, and deployment secrets discipline.
+- Security foundations existed: CSRF, Redis-ready rate limiting, secure headers, login lockout, password hashing, email verification/reset flows, cookie consent copy, and audit logging. The remaining production work is monitored async jobs, CSP tightening, data export/deletion workflows, backup drills, observability, and deployment secrets discipline.
 
 ## Implemented Architecture Upgrades
 
@@ -46,7 +46,7 @@
 2. Move notification email dispatch to a real queue such as Celery/RQ/Arq so user requests are never slowed by SMTP/API latency.
 3. Store structured skills in normalized tables or PostgreSQL arrays/trigram indexes instead of comma-separated strings.
 4. Add account data export, deletion queue, consent ledger, and retention schedules for GDPR-style data handling.
-5. Replace `memory://` rate limit storage with Redis in production.
+5. Keep `RATELIMIT_STORAGE_URI` on Redis in production and verify all web/worker processes share it.
 6. Tighten CSP by removing inline script/style allowances after templates are migrated to nonce-based scripts and static CSS.
 7. Add OpenTelemetry/Sentry integration for error tracing, performance metrics, and security event dashboards.
 8. Add Playwright accessibility and responsive visual tests for the hiring and collaboration flows.

@@ -1,6 +1,6 @@
 # Database Schema
 
-AuthFlow uses SQLAlchemy models in `app/models/__init__.py`. This document summarizes the schema and relationships as implemented in code.
+HaradiBots uses SQLAlchemy models in `app/models/__init__.py`. This document summarizes the schema and relationships as implemented in code.
 
 ## Model Overview
 

@@ -20,8 +20,8 @@ class AuditEventType(Enum):
     LOGIN_FAILED = "login_failed"
     LOGIN_ATTEMPT_LOCKED = "login_attempt_locked"
     LOGOUT = "logout"
-    PASSWORD_CHANGED = "password_changed"
-    PASSWORD_RESET = "password_reset"
+    PASSWORD_CHANGED = "password_changed"  # nosec B105
+    PASSWORD_RESET = "password_reset"  # nosec B105
     ACCOUNT_CREATED = "account_created"
     ACCOUNT_DELETED = "account_deleted"
     SUPPORT_REQUEST_CREATED = "support_request_created"
@@ -52,8 +52,8 @@ class AuditEventType(Enum):
     FILE_REJECTED = "file_rejected"
     
     # API operations
-    API_TOKEN_GENERATED = "api_token_generated"
-    API_TOKEN_REVOKED = "api_token_revoked"
+    API_TOKEN_GENERATED = "api_token_generated"  # nosec B105
+    API_TOKEN_REVOKED = "api_token_revoked"  # nosec B105
     
     # Suspicious activity
     SUSPICIOUS_ACCESS = "suspicious_access"
@@ -113,7 +113,7 @@ def audit_log(
             actor_username = current_user.username
         elif actor_username is None and actor_id is not None:
             from app.models import User
-            user = User.query.get(actor_id)
+            user = db.session.get(User, actor_id)
             if user:
                 actor_username = user.username
         

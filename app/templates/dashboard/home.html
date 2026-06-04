@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — AuthFlow{% endblock %}
+{% block title %}Dashboard — HaradiBots{% endblock %}
 {% block meta_desc %}Your developer workspace. Track projects, blogs, XP, and community activity.{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -137,7 +137,7 @@
                 <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
                     {% for devlog in recent_devlogs %}
                     <a href="{{ url_for('devlogs.detail', devlog_id=devlog.id) }}" style="display:flex;align-items:flex-start;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast) var(--ease-out);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
-                        <div class="avatar-v2 avatar-v2--sm">{{ devlog.author.username[0] | upper }}</div>
+                        {{ user_avatar(devlog.author, 'avatar-v2 avatar-v2--sm') }}
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-1);">
                                 <span style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">@{{ devlog.author.username }}</span>
@@ -263,7 +263,7 @@
                 <div class="grid-auto stagger">
                     {% for user in suggested_users %}
                     <a href="{{ url_for('main.public_profile', username=user.username) }}" class="card-v2" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-4);text-decoration:none;">
-                        <div class="avatar-v2">{{ user.username[0] | upper }}</div>
+                        {{ user_avatar(user, 'avatar-v2') }}
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</div>
                             <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ user.username }}{% if user.headline %} · {{ user.headline[:40] }}{% endif %}</div>

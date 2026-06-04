@@ -5,31 +5,94 @@ Handles validation, naming, and saving of uploaded files.
 
 import os
 import secrets
+import shlex
+import subprocess  # nosec B404
+import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
 import requests
 from PIL import Image
-from flask import current_app
+from flask import current_app, url_for
 from werkzeug.utils import secure_filename
 
 
-ALLOWED_UPLOAD_FOLDERS = {'avatars', 'banners', 'blogs', 'projects', 'devlogs', 'messages'}
+PUBLIC_UPLOAD_FOLDERS = {'avatars', 'banners', 'blogs', 'projects', 'devlogs'}
+PRIVATE_UPLOAD_FOLDERS = {'messages'}
+ALLOWED_UPLOAD_FOLDERS = PUBLIC_UPLOAD_FOLDERS | PRIVATE_UPLOAD_FOLDERS
+IMAGE_MIME_BY_FORMAT = {
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "GIF": "image/gif",
+    "WEBP": "image/webp",
+}
+MESSAGE_MIME_BY_EXTENSION = {
+    "pdf": "application/pdf",
+    "txt": "text/plain; charset=utf-8",
+    "zip": "application/zip",
+}
+IMAGE_MIME_BY_EXTENSION = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
 
 
-def _supabase_settings():
+def _supabase_settings(bucket=None):
     url = (current_app.config.get('SUPABASE_URL') or '').rstrip('/')
     key = current_app.config.get('SUPABASE_KEY')
-    bucket = current_app.config.get('UPLOAD_STORAGE_BUCKET', 'uploads')
+    bucket = bucket or current_app.config.get('UPLOAD_STORAGE_BUCKET', 'uploads')
     return url, key, bucket
 
 
-def upload_to_supabase(filepath, folder, filename, content_type=None):
-    """Mirror a saved upload to Supabase Storage when configured."""
+def _private_bucket():
+    return current_app.config.get('PRIVATE_UPLOAD_STORAGE_BUCKET', 'private-uploads')
+
+
+def _supabase_required():
+    return not current_app.config.get("TESTING") and current_app.config.get("APP_ENV") == "production"
+
+
+def supabase_configured():
+    supa_url, supa_key, _ = _supabase_settings()
+    return bool(supa_url and supa_key)
+
+
+def _should_keep_local_upload(uploaded):
+    if not uploaded:
+        return True
+    return bool(current_app.config.get("UPLOAD_KEEP_LOCAL"))
+
+
+def _remove_local_after_cloud_upload(filepath, uploaded):
+    path = Path(filepath)
+    if not _should_keep_local_upload(uploaded) and path.exists():
+        path.unlink(missing_ok=True)
+
+
+def scan_file_for_virus(filepath):
+    """Run an optional server-side scanner command against an uploaded file."""
+    if not current_app.config.get("VIRUS_SCAN_ENABLED"):
+        return True
+    command = current_app.config.get("VIRUS_SCAN_COMMAND")
+    if not command:
+        raise RuntimeError("Virus scan is enabled but VIRUS_SCAN_COMMAND is not configured.")
+    args = shlex.split(command) + [str(filepath)]
+    result = subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)  # nosec B603
+    if result.returncode != 0:
+        current_app.logger.warning("Virus scanner rejected upload %s: %s", filepath, result.stderr.decode("utf-8", "ignore")[:300])
+        raise ValueError("The uploaded file did not pass security scanning.")
+    return True
+
+
+def upload_to_supabase(filepath, folder, filename, content_type=None, bucket=None):
+    """Upload a saved file to Supabase Storage when configured."""
     if folder not in ALLOWED_UPLOAD_FOLDERS or Path(filename).name != filename:
         return False
 
-    supa_url, supa_key, bucket = _supabase_settings()
+    supa_url, supa_key, bucket = _supabase_settings(bucket)
     if not supa_url or not supa_key:
         return False
 
@@ -51,12 +114,12 @@ def upload_to_supabase(filepath, folder, filename, content_type=None):
     return True
 
 
-def delete_from_supabase(folder, filename):
+def delete_from_supabase(folder, filename, bucket=None):
     """Delete a mirrored upload from Supabase Storage when configured."""
     if folder not in ALLOWED_UPLOAD_FOLDERS or Path(filename).name != filename:
         return False
 
-    supa_url, supa_key, bucket = _supabase_settings()
+    supa_url, supa_key, bucket = _supabase_settings(bucket)
     if not supa_url or not supa_key:
         return False
 
@@ -74,13 +137,44 @@ def delete_from_supabase(folder, filename):
 
 
 def supabase_public_url(folder, filename):
-    if folder not in ALLOWED_UPLOAD_FOLDERS or Path(filename).name != filename:
+    if folder not in PUBLIC_UPLOAD_FOLDERS or Path(filename).name != filename:
         return None
     supa_url, _, bucket = _supabase_settings()
     if not supa_url:
         return None
     encoded_path = quote(f"{folder}/{filename}", safe="/")
     return f"{supa_url}/storage/v1/object/public/{bucket}/{encoded_path}"
+
+
+def public_upload_url(folder, filename):
+    if not filename:
+        return ""
+    if folder in PUBLIC_UPLOAD_FOLDERS and Path(filename).name == filename:
+        if not current_app.config.get("UPLOAD_KEEP_LOCAL"):
+            public_url = supabase_public_url(folder, filename)
+            if public_url:
+                return public_url
+        return url_for("uploaded_file", folder=folder, filename=filename)
+    return ""
+
+
+def fetch_private_upload(folder, filename):
+    if folder not in PRIVATE_UPLOAD_FOLDERS or Path(filename).name != filename:
+        return None
+    supa_url, supa_key, bucket = _supabase_settings(_private_bucket())
+    if not supa_url or not supa_key:
+        return None
+    encoded_path = quote(f"{folder}/{filename}", safe="/")
+    endpoint = f"{supa_url}/storage/v1/object/{bucket}/{encoded_path}"
+    response = requests.get(
+        endpoint,
+        headers={"Authorization": f"Bearer {supa_key}", "apikey": supa_key},
+        timeout=45,
+    )
+    if response.status_code != 200:
+        current_app.logger.info("Supabase private fetch failed: %s %s", response.status_code, response.text[:200])
+        return None
+    return response.content, response.headers.get("content-type") or "application/octet-stream"
 
 
 def save_upload(file, folder, max_size=(1200, 1200)):
@@ -118,11 +212,18 @@ def save_upload(file, folder, max_size=(1200, 1200)):
         file.save(filepath)
 
         validate_image(filepath)
+        scan_file_for_virus(filepath)
         resize_image(filepath, max_size)
+        content_type = detect_image_mime(filepath)
         try:
-            upload_to_supabase(filepath, folder, filename, getattr(file, "mimetype", None))
+            uploaded = upload_to_supabase(filepath, folder, filename, content_type)
+            if not uploaded and _supabase_required():
+                raise RuntimeError("Supabase upload storage is not configured.")
         except Exception:
             current_app.logger.exception('Error uploading to Supabase')
+            if _supabase_required():
+                raise
+        _remove_local_after_cloud_upload(filepath, uploaded)
 
         return filename
     except Exception as e:
@@ -167,6 +268,17 @@ def allowed_message_attachment(filename):
     return ext in current_app.config.get('MESSAGE_ATTACHMENT_EXTENSIONS', set())
 
 
+def safe_message_mime(filename, stored_mime=None):
+    """Return a conservative display MIME for validated or legacy attachments."""
+    ext = filename.rsplit('.', 1)[1].lower() if filename and '.' in filename else ''
+    stored_mime = (stored_mime or "").split(";", 1)[0].strip().lower()
+    if ext in IMAGE_MIME_BY_EXTENSION:
+        return stored_mime if stored_mime in set(IMAGE_MIME_BY_FORMAT.values()) else IMAGE_MIME_BY_EXTENSION[ext]
+    if ext in MESSAGE_MIME_BY_EXTENSION:
+        return MESSAGE_MIME_BY_EXTENSION[ext]
+    return "application/octet-stream"
+
+
 def _stream_size(file):
     content_length = getattr(file, "content_length", None)
     if content_length:
@@ -205,15 +317,23 @@ def save_message_attachment(file):
 
     try:
         file.save(filepath)
+        safe_mime = validate_message_attachment(filepath, file.filename)
+        scan_file_for_virus(filepath)
+        attachment_size = filepath.stat().st_size
         try:
-            upload_to_supabase(filepath, 'messages', filename, getattr(file, "mimetype", None))
+            uploaded = upload_to_supabase(filepath, 'messages', filename, safe_mime, bucket=_private_bucket())
+            if not uploaded and _supabase_required():
+                raise RuntimeError("Private Supabase upload storage is not configured.")
         except Exception:
             current_app.logger.exception('Error uploading message attachment to Supabase')
+            if _supabase_required():
+                raise
+        _remove_local_after_cloud_upload(filepath, uploaded)
         return {
             "filename": filename,
             "original_name": secure_filename(file.filename)[:255],
-            "size": filepath.stat().st_size,
-            "mime": (getattr(file, "mimetype", "") or "application/octet-stream")[:120],
+            "size": attachment_size,
+            "mime": safe_mime[:120],
         }, None
     except Exception as e:
         current_app.logger.warning("Error saving message attachment: %s", e)
@@ -242,11 +362,21 @@ def save_media_upload(file, folder='devlogs', max_size=(1400, 1400)):
         file.save(filepath)
         if media_type == "image":
             validate_image(filepath)
+            scan_file_for_virus(filepath)
             resize_image(filepath, max_size)
+            content_type = detect_image_mime(filepath)
+        else:
+            scan_file_for_virus(filepath)
+            content_type = media_mime_for(filename)
         try:
-            upload_to_supabase(filepath, folder, filename, getattr(file, "mimetype", None))
+            uploaded = upload_to_supabase(filepath, folder, filename, content_type)
+            if not uploaded and _supabase_required():
+                raise RuntimeError("Supabase upload storage is not configured.")
         except Exception:
             current_app.logger.exception('Error uploading media to Supabase')
+            if _supabase_required():
+                raise
+        _remove_local_after_cloud_upload(filepath, uploaded)
         return filename, media_type
     except Exception as e:
         current_app.logger.warning("Error saving media upload: %s", e)
@@ -303,6 +433,46 @@ def validate_image(filepath):
         img.verify()
 
 
+def detect_image_mime(filepath):
+    Image.MAX_IMAGE_PIXELS = current_app.config.get("MAX_IMAGE_PIXELS", 24_000_000)
+    with Image.open(filepath) as img:
+        mime = IMAGE_MIME_BY_FORMAT.get(img.format)
+    if not mime:
+        raise ValueError("Unsupported image format.")
+    return mime
+
+
+def media_mime_for(filename):
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    return {
+        "mp4": "video/mp4",
+        "webm": "video/webm",
+        "mov": "video/quicktime",
+    }.get(ext, "application/octet-stream")
+
+
+def validate_message_attachment(filepath, original_filename):
+    ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
+    if ext in {"png", "jpg", "jpeg", "gif", "webp"}:
+        validate_image(filepath)
+        resize_image(filepath, (1600, 1600))
+        return detect_image_mime(filepath)
+    if ext == "pdf":
+        with Path(filepath).open("rb") as file_handle:
+            if file_handle.read(5) != b"%PDF-":
+                raise ValueError("Invalid PDF file.")
+        return MESSAGE_MIME_BY_EXTENSION[ext]
+    if ext == "zip":
+        if not zipfile.is_zipfile(filepath):
+            raise ValueError("Invalid ZIP file.")
+        return MESSAGE_MIME_BY_EXTENSION[ext]
+    if ext == "txt":
+        with Path(filepath).open("rb") as file_handle:
+            file_handle.read(8192).decode("utf-8")
+        return MESSAGE_MIME_BY_EXTENSION[ext]
+    raise ValueError("Unsupported attachment type.")
+
+
 def delete_file(filename, folder):
     """
     Delete a file from the uploads folder.
@@ -320,9 +490,12 @@ def delete_file(filename, folder):
         if upload_root not in filepath.parents:
             current_app.logger.warning("Blocked delete outside upload root: %s", filename)
             return
+        deleted = False
         if filepath.exists():
             filepath.unlink()
+            deleted = True
         try:
-            delete_from_supabase(folder, filename)
+            deleted = delete_from_supabase(folder, filename, bucket=_private_bucket() if folder in PRIVATE_UPLOAD_FOLDERS else None) or deleted
         except Exception:
             current_app.logger.exception('Error deleting upload from Supabase')
+        return deleted

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Admin Backups - AuthFlow{% endblock %}
+{% block title %}Admin Backups - HaradiBots{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
 
 {% block content %}
@@ -63,7 +63,7 @@
                     </div>
                     <div class="backup-checklist">
                         <div>Run database migrations on Render.</div>
-                        <div>Set EMAIL_DELIVERY_ORDER to an API-first backend if SMTP is blocked.</div>
+                        <div>Use a host or SMTP provider/port that allows outbound SMTP.</div>
                         <div>Use a Supabase service-role key only as a private server env var.</div>
                         <div>Download one backup after creation and confirm it opens.</div>
                     </div>

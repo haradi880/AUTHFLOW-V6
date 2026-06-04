@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Search — AuthFlow{% endblock %}
-{% block meta_desc %}Search AuthFlow for developer blogs, projects, creators, robotics builds, and engineering knowledge.{% endblock %}
+{% block title %}Search — HaradiBots{% endblock %}
+{% block meta_desc %}Search HaradiBots for developer blogs, projects, creators, robotics builds, and engineering knowledge.{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -28,7 +28,7 @@
                 <form method="GET" style="display:flex;align-items:center;gap:var(--sp-3);">
                     <div style="flex:1;position:relative;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--text-muted);"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input type="text" class="input-v2" name="q" value="{{ query }}" placeholder="Search blogs, projects, and creators..." style="padding-left:44px;font-size:var(--text-lg);height:56px;" autofocus>
+                        <input type="text" class="input-v2" name="q" value="{{ query }}" placeholder="Search people, projects, blogs, jobs, skills..." style="padding-left:44px;font-size:var(--text-lg);height:56px;" autofocus>
                     </div>
                     <button type="submit" class="btn-v2 btn-v2--primary" style="height:56px;padding:0 var(--sp-6);">Search</button>
                 </form>
@@ -80,11 +80,25 @@
                     </div>
 
                     <div class="card-v2">
+                        <div class="section-header"><h2 class="section-header__title">Jobs</h2></div>
+                        <div style="display:flex;flex-direction:column;gap:var(--sp-3);">
+                            {% for job in jobs %}
+                            <a href="{{ url_for('hiring.job_detail', slug=job.slug) }}" style="display:block;padding:var(--sp-3);border-radius:var(--r-lg);background:var(--surface-3);text-decoration:none;">
+                                <div style="font-size:var(--text-sm);font-weight:600;color:var(--text-primary);margin-bottom:var(--sp-1);">{{ job.title }}</div>
+                                <div style="font-size:var(--text-xs);color:var(--text-muted);">{{ job.company.name if job.company else 'Company' }}{% if job.location %} - {{ job.location }}{% endif %}</div>
+                            </a>
+                            {% else %}
+                            <div class="empty-v2"><div class="empty-v2__title">No jobs found</div></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="card-v2">
                         <div class="section-header"><h2 class="section-header__title">Creators</h2></div>
                         <div style="display:flex;flex-direction:column;gap:var(--sp-2);">
                             {% for user in users %}
                             <a href="{{ url_for('main.public_profile', username=user.username) }}" style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
-                                <div class="avatar-v2 avatar-v2--sm">{{ user.username[0]|upper }}</div>
+                                {{ user_avatar(user, 'avatar-v2 avatar-v2--sm') }}
                                 <div style="flex:1;min-width:0;">
                                     <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</div>
                                     <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ user.username }}</div>
@@ -93,6 +107,17 @@
                             </a>
                             {% else %}
                             <div class="empty-v2"><div class="empty-v2__title">No creators found</div></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="card-v2">
+                        <div class="section-header"><h2 class="section-header__title">Tags and Skills</h2></div>
+                        <div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
+                            {% for tag in tags %}
+                            <a class="tag-v2" href="{{ url_for('main.search', q=tag.name) }}" style="text-decoration:none;">{{ tag.name }}</a>
+                            {% else %}
+                            <div class="empty-v2"><div class="empty-v2__title">No tags found</div></div>
                             {% endfor %}
                         </div>
                     </div>

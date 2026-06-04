@@ -5,12 +5,14 @@ Blog Routes - Create, Read, Update, Delete blog posts.
 from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload, load_only, noload, selectinload
 
 from app.extensions import db
 from app.models import Blog, Category, Tag, Comment, BlogLike, Bookmark
 from app.services.content import calculate_reading_time, generate_slug, render_markdown, sync_tags
 from app.services.gamification import award_xp
-from app.utils.helpers import paginate, create_notification
+from app.services.cache import public_response_cache
+from app.utils.helpers import paginate_without_count, create_notification
 from app.utils.uploads_secure import delete_file_secure, save_upload_secure
 from app.utils.decorators import owner_required
 from app.utils.rate_limit import rate_limit
@@ -24,6 +26,7 @@ blog_bp = Blueprint('blog', __name__)
 # ============================================================
 
 @blog_bp.route('/blogs')
+@public_response_cache("blogs-feed")
 def blogs_feed():
     """Display all published blogs."""
     
@@ -35,13 +38,33 @@ def blogs_feed():
     page = request.args.get('page', 1, type=int)
     
     # Start with base query - only published blogs
-    query = Blog.query.filter_by(status='published')
+    query = Blog.query.options(
+        load_only(
+            Blog.id,
+            Blog.title,
+            Blog.slug,
+            Blog.excerpt,
+            Blog.thumbnail,
+            Blog.status,
+            Blog.reading_time,
+            Blog.views_count,
+            Blog.likes_count,
+            Blog.comments_count,
+            Blog.published_at,
+            Blog.created_at,
+            Blog.user_id,
+            Blog.category_id,
+        ),
+        joinedload(Blog.author),
+        joinedload(Blog.category),
+        selectinload(Blog.tags),
+    ).filter_by(status='published')
     
     # Apply category filter
     if category:
-        cat = Category.query.filter_by(slug=category).first()
-        if cat:
-            query = query.filter_by(category_id=cat.id)
+        category_id = db.session.query(Category.id).filter_by(slug=category).scalar()
+        if category_id:
+            query = query.filter_by(category_id=category_id)
     
     # Apply tag filter
     if tag:
@@ -67,17 +90,33 @@ def blogs_feed():
         query = query.order_by(Blog.created_at.desc())
     
     # Paginate results
-    pagination = paginate(query, page)
+    pagination = paginate_without_count(query, page)
     blogs = pagination.items
     
     # Get all categories for filter dropdown
-    categories = Category.query.all()
+    categories = Category.query.options(load_only(Category.id, Category.name, Category.slug)).order_by(Category.name.asc()).all()
     
     # Get trending tags
-    trending_tags = Tag.query.limit(10).all()
+    trending_tags = Tag.query.options(load_only(Tag.id, Tag.name, Tag.slug)).order_by(Tag.name.asc()).limit(10).all()
     
     # Get featured blog (most liked recent blog)
-    featured = Blog.query.filter_by(status='published')\
+    featured = Blog.query.options(
+        load_only(
+            Blog.id,
+            Blog.title,
+            Blog.slug,
+            Blog.excerpt,
+            Blog.thumbnail,
+            Blog.status,
+            Blog.reading_time,
+            Blog.likes_count,
+            Blog.created_at,
+            Blog.user_id,
+            Blog.category_id,
+        ),
+        joinedload(Blog.author),
+        noload(Blog.tags),
+    ).filter_by(status='published')\
         .order_by(Blog.likes_count.desc()).first()
     
     return render_template('feed/blogs_feed.html',
@@ -102,8 +141,9 @@ def blog_detail(slug):
     # Increment view count
     blog.views_count += 1
     db.session.commit()
-    recent_ids = [item for item in session.get('recently_viewed_blogs', []) if item != blog.id]
-    session['recently_viewed_blogs'] = [blog.id] + recent_ids[:5]
+    if current_user.is_authenticated:
+        recent_ids = [item for item in session.get('recently_viewed_blogs', []) if item != blog.id]
+        session['recently_viewed_blogs'] = [blog.id] + recent_ids[:5]
     
     # Get comments
     comments = Comment.query.filter_by(blog_id=blog.id, parent_id=None)\
@@ -137,6 +177,7 @@ def blog_detail(slug):
 
 @blog_bp.route('/upload/blog', methods=['GET', 'POST'])
 @login_required
+@rate_limit(max_calls=12, window_seconds=300, scope="blog-upload")
 def create_blog():
     """Create a new blog post."""
     
@@ -146,7 +187,7 @@ def create_blog():
         excerpt = request.form.get('excerpt', '').strip()
         category_id = request.form.get('category_id', type=int)
         tags_str = request.form.get('tags', '')  # Comma-separated tags
-        status = request.form.get('status', 'draft')  # draft or published
+        status = request.form.get('status') if request.form.get('status') in {'draft', 'published'} else 'draft'
         
         # Generate unique slug from title
         slug = generate_slug(title, Blog)
@@ -202,17 +243,18 @@ def create_blog():
 @blog_bp.route('/blog/<int:blog_id>/edit', methods=['GET', 'POST'])
 @login_required
 @owner_required(Blog)
+@rate_limit(max_calls=20, window_seconds=300, scope="blog-edit")
 def edit_blog(blog_id):
     """Edit an existing blog post."""
     
-    blog = Blog.query.get_or_404(blog_id)
+    blog = db.get_or_404(Blog, blog_id)
     
     if request.method == 'POST':
         blog.title = request.form.get('title', '').strip()
         blog.content = request.form.get('content', '')
         blog.excerpt = request.form.get('excerpt', '').strip()[:500]
         blog.category_id = request.form.get('category_id', type=int)
-        blog.status = request.form.get('status', 'draft')
+        blog.status = request.form.get('status') if request.form.get('status') in {'draft', 'published'} else 'draft'
         
         # Update reading time
         blog.calculate_reading_time()
@@ -223,6 +265,10 @@ def edit_blog(blog_id):
             blog.published_at = datetime.utcnow()
         
         # Handle thumbnail update
+        if request.form.get('remove_thumbnail') == '1' and blog.thumbnail:
+            delete_file_secure(blog.thumbnail, 'blogs')
+            blog.thumbnail = None
+
         if 'thumbnail' in request.files:
             file = request.files['thumbnail']
             if file.filename:
@@ -263,7 +309,7 @@ def delete_blog(blog_id):
     from app.utils.soft_delete import soft_delete
     from app.utils.audit import audit_log, AuditEventType
     
-    blog = Blog.query.get_or_404(blog_id)
+    blog = db.get_or_404(Blog, blog_id)
     
     # Verify password for this sensitive operation
     password = request.form.get('password', '').strip()
@@ -306,7 +352,7 @@ def delete_blog(blog_id):
 def add_comment(blog_id):
     """Add a comment to a blog post."""
     
-    blog = Blog.query.get_or_404(blog_id)
+    blog = db.get_or_404(Blog, blog_id)
     content = request.form.get('content', '').strip()
     
     if not content:
@@ -344,7 +390,7 @@ def add_comment(blog_id):
 @blog_bp.route('/blog/comment/<int:comment_id>/delete', methods=['POST'])
 @login_required
 def delete_comment(comment_id):
-    comment = Comment.query.get_or_404(comment_id)
+    comment = db.get_or_404(Comment, comment_id)
     blog = comment.blog
     if comment.user_id != current_user.id and blog.user_id != current_user.id and not current_user.is_admin:
         flash('You can only delete your own comments or comments on your blog.', 'error')
@@ -362,10 +408,11 @@ def delete_comment(comment_id):
 
 @blog_bp.route('/blog/<int:blog_id>/like', methods=['POST'])
 @login_required
+@rate_limit(max_calls=60, window_seconds=300, scope="blog-like")
 def like_blog(blog_id):
     """Like or unlike a blog post."""
     
-    blog = Blog.query.get_or_404(blog_id)
+    blog = db.get_or_404(Blog, blog_id)
     
     # Check if already liked
     existing_like = BlogLike.query.filter_by(
@@ -407,10 +454,11 @@ def like_blog(blog_id):
 
 @blog_bp.route('/blog/<int:blog_id>/bookmark', methods=['POST'])
 @login_required
+@rate_limit(max_calls=60, window_seconds=300, scope="blog-bookmark")
 def bookmark_blog(blog_id):
     """Bookmark or unbookmark a blog post."""
     
-    blog = Blog.query.get_or_404(blog_id)
+    blog = db.get_or_404(Blog, blog_id)
     
     existing = Bookmark.query.filter_by(
         user_id=current_user.id,

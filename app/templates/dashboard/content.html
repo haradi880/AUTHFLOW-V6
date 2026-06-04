@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}My Content - HaradiBots{% endblock %}
+{% block meta_desc %}Manage your HaradiBots blogs, drafts, and recoverable deleted posts.{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/blog.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="app-shell">
+    {% include 'components/sidebar.html' %}
+    <div class="app-main">
+        <nav class="topnav-v2">
+            <div class="topnav-v2__left">
+                <button class="menu-toggle-v2" type="button" aria-label="Open navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <div class="topnav-v2__breadcrumb">
+                    <span class="topnav-v2__kicker">Workspace</span>
+                    <span class="topnav-v2__sep">/</span>
+                    <span class="topnav-v2__title">My Content</span>
+                </div>
+            </div>
+            <div class="topnav-v2__right">
+                <a href="{{ url_for('blog.create_blog') }}" class="btn-v2 btn-v2--primary btn-v2--sm">Write Blog</a>
+            </div>
+        </nav>
+
+        <div class="app-content" style="max-width:1180px;">
+            <section class="card-v2 animate-fade-up" style="margin-bottom:var(--sp-6);">
+                <div class="section-header">
+                    <div>
+                        <h1 class="section-header__title">Uploaded Blogs</h1>
+                        <p style="margin:var(--sp-1) 0 0;color:var(--text-muted);font-size:var(--text-sm);">Control published posts, drafts, and recoverable deletes.</p>
+                    </div>
+                </div>
+
+                <div class="grid-4" style="margin-bottom:var(--sp-5);">
+                    <div class="stat-v2"><div class="stat-v2__label">All</div><div class="stat-v2__value">{{ stats.all }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Published</div><div class="stat-v2__value">{{ stats.published }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Drafts</div><div class="stat-v2__value">{{ stats.draft }}</div></div>
+                    <div class="stat-v2"><div class="stat-v2__label">Recoverable</div><div class="stat-v2__value">{{ stats.deleted }}</div></div>
+                </div>
+
+                <div class="content-tabs">
+                    {% for key, label in [('all','All'), ('published','Published'), ('draft','Drafts'), ('deleted','Deleted')] %}
+                    <a class="content-tab {{ 'content-tab--active' if tab == key }}" href="{{ url_for('main.content_manager', tab=key) }}">{{ label }}</a>
+                    {% endfor %}
+                </div>
+            </section>
+
+            {% if tab == 'deleted' %}
+            <section class="card-v2 animate-fade-up">
+                <div class="content-table">
+                    {% for item in deleted_items %}
+                    {% set data = item.content_data or {} %}
+                    <article class="content-row">
+                        <div class="content-row__main">
+                            <div class="content-row__title">{{ data.get('title', 'Deleted blog') }}</div>
+                            <div class="content-row__meta">
+                                Deleted {{ item.deleted_at.strftime('%b %d, %Y') }}
+                                {% if item.expires_at %} &middot; recover until {{ item.expires_at.strftime('%b %d, %Y') }}{% endif %}
+                            </div>
+                        </div>
+                        <div class="content-row__status">
+                            <span class="badge-v2 {{ 'badge-v2--success' if item.can_recover() else 'badge-v2--secondary' }}">{{ 'Recoverable' if item.can_recover() else 'Expired' }}</span>
+                        </div>
+                        <div class="content-row__actions">
+                            {% if item.can_recover() %}
+                            <form method="POST" action="{{ url_for('main.restore_blog_archive', archive_id=item.id) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn-v2 btn-v2--primary btn-v2--sm">Restore</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% else %}
+                    <div class="empty-v2">
+                        <div class="empty-v2__title">No deleted blogs</div>
+                        <div class="empty-v2__desc">Deleted posts you can recover will appear here.</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% else %}
+            <section class="card-v2 animate-fade-up">
+                <div class="content-table">
+                    {% for blog in blogs %}
+                    <article class="content-row">
+                        <div class="content-row__media">
+                            {% if blog.thumbnail %}
+                            <img src="{{ blog.thumbnail|upload_url('blogs') }}" alt="{{ blog.title }}">
+                            {% else %}
+                            <div class="content-row__placeholder">B</div>
+                            {% endif %}
+                        </div>
+                        <div class="content-row__main">
+                            <div class="content-row__title">{{ blog.title }}</div>
+                            <div class="content-row__meta">
+                                Updated {{ blog.updated_at.strftime('%b %d, %Y') }} &middot; {{ blog.views_count }} views &middot; {{ blog.likes_count }} likes &middot; {{ blog.comments_count }} comments
+                            </div>
+                        </div>
+                        <div class="content-row__status">
+                            <span class="badge-v2 {{ 'badge-v2--success' if blog.status == 'published' else 'badge-v2--warning' }}">{{ blog.status|title }}</span>
+                        </div>
+                        <div class="content-row__actions">
+                            {% if blog.status == 'published' %}
+                            <a class="btn-v2 btn-v2--secondary btn-v2--sm" href="{{ url_for('blog.blog_detail', slug=blog.slug) }}">View</a>
+                            {% endif %}
+                            <a class="btn-v2 btn-v2--primary btn-v2--sm" href="{{ url_for('blog.edit_blog', blog_id=blog.id) }}">Edit</a>
+                            <details class="content-delete">
+                                <summary class="btn-v2 btn-v2--secondary btn-v2--sm">Delete</summary>
+                                <form method="POST" action="{{ url_for('blog.delete_blog', blog_id=blog.id) }}" onsubmit="return confirm('Delete this blog? You can recover it for 30 days.');">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <input class="input-v2" type="password" name="password" placeholder="Password" required>
+                                    <button class="btn-v2 btn-v2--secondary btn-v2--sm" type="submit">Confirm</button>
+                                </form>
+                            </details>
+                        </div>
+                    </article>
+                    {% else %}
+                    <div class="empty-v2">
+                        <div class="empty-v2__title">No blogs in this view</div>
+                        <div class="empty-v2__desc">Write a new blog or switch tabs.</div>
+                        <a href="{{ url_for('blog.create_blog') }}" class="btn-v2 btn-v2--primary">Write Blog</a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            {% if pagination.pages > 1 %}
+            <div style="display:flex;justify-content:center;gap:var(--sp-3);margin-top:var(--sp-5);">
+                {% if pagination.has_prev %}<a class="btn-v2 btn-v2--secondary" href="{{ url_for('main.content_manager', tab=tab, page=pagination.prev_num) }}">Previous</a>{% endif %}
+                {% if pagination.has_next %}<a class="btn-v2 btn-v2--secondary" href="{{ url_for('main.content_manager', tab=tab, page=pagination.next_num) }}">Next</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

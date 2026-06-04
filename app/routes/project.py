@@ -4,14 +4,17 @@ Project Routes - Create, Read, Update, Delete projects.
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import current_user, login_required
+from sqlalchemy.orm import joinedload, load_only, selectinload
 
 from app.extensions import db
 from app.models import Project, ProjectImage, ProjectStar, Category, Tag
 from app.services.content import generate_slug, sync_tags
 from app.services.gamification import award_xp
-from app.utils.helpers import paginate, create_notification
+from app.services.cache import public_response_cache
+from app.utils.helpers import paginate_without_count, create_notification
 from app.utils.uploads_secure import delete_file_secure, save_upload_secure
 from app.utils.decorators import owner_required
+from app.utils.rate_limit import rate_limit
 
 # Create the blueprint
 project_bp = Blueprint('project', __name__)
@@ -22,6 +25,7 @@ project_bp = Blueprint('project', __name__)
 # ============================================================
 
 @project_bp.route('/projects')
+@public_response_cache("projects-feed")
 def projects_feed():
     """Display all published projects."""
     
@@ -32,13 +36,31 @@ def projects_feed():
     page = request.args.get('page', 1, type=int)
     
     # Base query - only published projects
-    query = Project.query.filter_by(status='published')
+    query = Project.query.options(
+        load_only(
+            Project.id,
+            Project.title,
+            Project.slug,
+            Project.description,
+            Project.thumbnail,
+            Project.github_url,
+            Project.demo_url,
+            Project.stars_count,
+            Project.status,
+            Project.created_at,
+            Project.user_id,
+            Project.category_id,
+        ),
+        joinedload(Project.author),
+        joinedload(Project.category),
+        selectinload(Project.tags),
+    ).filter_by(status='published')
     
     # Apply category filter
     if category:
-        cat = Category.query.filter_by(slug=category).first()
-        if cat:
-            query = query.filter_by(category_id=cat.id)
+        category_id = db.session.query(Category.id).filter_by(slug=category).scalar()
+        if category_id:
+            query = query.filter_by(category_id=category_id)
     
     # Apply tag filter
     if tag:
@@ -53,12 +75,12 @@ def projects_feed():
         query = query.order_by(Project.created_at.desc())
     
     # Paginate
-    pagination = paginate(query, page)
+    pagination = paginate_without_count(query, page)
     projects = pagination.items
     
     # Get categories and tags for filters
-    categories = Category.query.all()
-    trending_tags = Tag.query.limit(10).all()
+    categories = Category.query.options(load_only(Category.id, Category.name, Category.slug)).order_by(Category.name.asc()).all()
+    trending_tags = Tag.query.options(load_only(Tag.id, Tag.name, Tag.slug)).order_by(Tag.name.asc()).limit(10).all()
     
     return render_template('feed/projects_feed.html',
                          projects=projects,
@@ -98,8 +120,9 @@ def project_detail(slug):
 
 @project_bp.route('/project/<int:project_id>/star', methods=['POST'])
 @login_required
+@rate_limit(max_calls=60, window_seconds=300, scope="project-star")
 def star_project(project_id):
-    project = Project.query.get_or_404(project_id)
+    project = db.get_or_404(Project, project_id)
     existing = ProjectStar.query.filter_by(user_id=current_user.id, project_id=project.id).first()
     if existing:
         db.session.delete(existing)
@@ -129,6 +152,7 @@ def star_project(project_id):
 
 @project_bp.route('/upload/project', methods=['GET', 'POST'])
 @login_required
+@rate_limit(max_calls=12, window_seconds=300, scope="project-upload")
 def create_project():
     """Create a new project."""
     
@@ -204,10 +228,11 @@ def create_project():
 @project_bp.route('/project/<int:project_id>/edit', methods=['GET', 'POST'])
 @login_required
 @owner_required(Project)
+@rate_limit(max_calls=20, window_seconds=300, scope="project-edit")
 def edit_project(project_id):
     """Edit an existing project."""
     
-    project = Project.query.get_or_404(project_id)
+    project = db.get_or_404(Project, project_id)
     
     if request.method == 'POST':
         project.title = request.form.get('title', '').strip()
@@ -269,7 +294,7 @@ def edit_project(project_id):
 @project_bp.route('/project/image/<int:image_id>/delete', methods=['POST'])
 @login_required
 def delete_project_image(image_id):
-    image = ProjectImage.query.get_or_404(image_id)
+    image = db.get_or_404(ProjectImage, image_id)
     project = image.project
     if project.user_id != current_user.id and not current_user.is_admin:
         flash('You can only edit your own project gallery.', 'error')
@@ -294,7 +319,7 @@ def delete_project(project_id):
     from app.utils.soft_delete import soft_delete
     from app.utils.audit import audit_log, AuditEventType
     
-    project = Project.query.get_or_404(project_id)
+    project = db.get_or_404(Project, project_id)
     
     # Verify password for this sensitive operation
     password = request.form.get('password', '').strip()

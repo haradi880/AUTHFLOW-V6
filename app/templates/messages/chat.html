@@ -1,19 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Chat with @{{ other_user.username }} - {{ config.APP_NAME }}{% endblock %}
+{% block title %}{{ active_conversation.title }} - Messages - {{ config.APP_NAME }}{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/messages.css') }}">
 {% endblock %}
-
-{% macro user_avatar(user, size_class='avatar-v2--sm', extra_class='') %}
-<div class="avatar-v2 {{ size_class }} {{ extra_class }}">
-    {% if user.avatar and user.avatar != 'default.jpg' %}
-    <img src="{{ user.avatar_url }}" alt="{{ user.username }}">
-    {% else %}
-    {{ user.username[0]|upper }}
-    {% endif %}
-</div>
-{% endmacro %}
 
 {% block content %}
 <div class="app-shell">
@@ -27,35 +17,77 @@
                 <div class="topnav-v2__breadcrumb">
                     <a href="{{ url_for('messages.inbox') }}" class="topnav-v2__kicker" style="text-decoration:none;color:inherit;">Messages</a>
                     <span class="topnav-v2__sep">/</span>
-                    <span class="topnav-v2__title">@{{ other_user.username }}</span>
+                    <span class="topnav-v2__title">{{ active_conversation.title }}</span>
                 </div>
             </div>
         </nav>
 
-        <div class="app-content chat-shell">
+        <div class="app-content chat-shell chat-shell--pro">
+            <aside class="chat-sidebar">
+                <form method="GET" action="{{ url_for('messages.inbox') }}" class="messages-search">
+                    <input class="input-v2" name="q" placeholder="Search chats">
+                </form>
+                <div class="conversation-list conversation-list--compact">
+                    {% for conv in conversations %}
+                    {% set item = conversation_payload_fn(conv) %}
+                    <a class="conversation-row {{ 'conversation-row--active' if conv.id == conversation.id else '' }} {{ 'conversation-row--unread' if item.unread_count > 0 else '' }}" href="{{ url_for('messages.conversation_chat', public_id=conv.public_id) }}">
+                        <div class="avatar-v2 avatar-v2--md conversation-row__avatar">
+                            {% if item.avatar_url %}<img src="{{ item.avatar_url }}" alt="{{ item.title }}">{% else %}{{ item.avatar_initial }}{% endif %}
+                        </div>
+                        <div class="conversation-row__main">
+                            <div class="conversation-row__top">
+                                <span class="conversation-row__name">{{ item.title }}</span>
+                            </div>
+                            <div class="conversation-row__preview">
+                                {% if item.last_message %}
+                                    {% if item.last_message.sender_id == current_user.id %}You: {% endif %}{{ item.last_message.content }}
+                                {% else %}
+                                    No messages yet
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if item.unread_count > 0 %}<span class="conversation-row__badge">{{ item.unread_count }}</span>{% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+            </aside>
+
             <section class="chat-panel">
                 <header class="chat-header">
                     <div class="chat-header__identity">
-                        {{ user_avatar(other_user, 'avatar-v2--md', 'chat-header__avatar') }}
+                        <div class="avatar-v2 avatar-v2--md chat-header__avatar">
+                            {% if active_conversation.avatar_url %}<img src="{{ active_conversation.avatar_url }}" alt="{{ active_conversation.title }}">{% else %}{{ active_conversation.avatar_initial }}{% endif %}
+                        </div>
                         <div>
-                            <div class="chat-header__name">{{ other_user.full_name or other_user.username }}</div>
-                            <div class="chat-header__handle">@{{ other_user.username }}</div>
+                            <div class="chat-header__name">{{ active_conversation.title }}</div>
+                            <div class="chat-header__handle">{{ active_conversation.subtitle }}</div>
+                            <div class="chat-header__typing" id="typingIndicator" hidden></div>
+                            <div class="chat-header__status" id="connectionStatus" aria-live="polite">Connecting</div>
                         </div>
                     </div>
                     <div class="chat-header__actions">
+                        {% if other_user %}
                         <a class="btn-v2 btn-v2--secondary btn-v2--sm" href="{{ url_for('main.public_profile', username=other_user.username) }}">Profile</a>
+                        {% endif %}
                     </div>
                 </header>
+
+                <div class="chat-load-row">
+                    <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" id="loadOlderBtn" {{ 'disabled' if not messages }}>Load older</button>
+                </div>
 
                 <div id="chatMessages" class="chat-messages" aria-live="polite">
                     {% for msg in messages %}
                     {% set is_sent = msg.sender_id == current_user.id %}
                     <div class="message {{ 'message--sent' if is_sent else 'message--received' }}" data-id="{{ msg.id }}">
+                        {% if conversation.type == 'group' and not is_sent %}
+                        <div class="message__sender">@{{ msg.sender.username }}</div>
+                        {% endif %}
                         <div class="message__bubble">{{ msg.content }}</div>
                         {% if msg.has_attachment %}
-                        <a class="message__attachment {{ 'message__attachment--image' if msg.attachment_is_image else '' }}" href="{{ url_for('uploaded_file', folder='messages', filename=msg.attachment_filename) }}" target="_blank" rel="noopener">
+                        <a class="message__attachment {{ 'message__attachment--image' if msg.attachment_is_image else '' }}" href="{{ url_for('messages.message_attachment', message_id=msg.id) }}" target="_blank" rel="noopener">
                             {% if msg.attachment_is_image %}
-                            <img src="{{ url_for('uploaded_file', folder='messages', filename=msg.attachment_filename) }}" alt="{{ msg.attachment_original_name or 'Attachment' }}">
+                            <img src="{{ url_for('messages.message_attachment', message_id=msg.id) }}" alt="{{ msg.attachment_original_name or 'Attachment' }}">
                             {% endif %}
                             <span>{{ msg.attachment_original_name or 'Attachment' }}</span>
                         </a>
@@ -63,33 +95,33 @@
                         <div class="message__meta">
                             <time class="js-local-time" datetime="{{ msg.created_at.isoformat() }}Z" data-format="time">{{ msg.created_at.strftime('%H:%M') }}</time>
                             {% if is_sent %}
-                            <span class="message-status" aria-label="{{ 'Read' if msg.is_read else 'Sent' }}">
-                                {% if msg.is_read %}
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15"/></svg>
-                                {% else %}
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                                {% endif %}
-                            </span>
+                            <span class="message-status" aria-label="{{ msg.display_status_for(current_user)|title }}">{{ msg.display_status_for(current_user)|title }}</span>
                             {% endif %}
                         </div>
                     </div>
                     {% else %}
                     <div class="chat-empty" id="chatEmpty">
-                        {{ user_avatar(other_user, 'avatar-v2--xl', 'chat-profile__avatar') }}
+                        <div class="avatar-v2 avatar-v2--xl">{{ active_conversation.avatar_initial }}</div>
                         <div class="chat-empty__title">Start the conversation</div>
-                        <div>Send a quick note to @{{ other_user.username }}.</div>
+                        <div>Messages, files, and updates will appear here.</div>
                     </div>
                     {% endfor %}
                 </div>
 
                 <div class="chat-composer">
+                    <div class="chat-upload-preview" id="attachmentPreview" hidden>
+                        <span id="attachmentName"></span>
+                        <progress id="uploadProgress" value="0" max="100" hidden></progress>
+                        <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" id="clearAttachmentBtn">Remove</button>
+                        <button type="button" class="btn-v2 btn-v2--secondary btn-v2--sm" id="cancelUploadBtn" hidden>Cancel</button>
+                    </div>
                     <form id="chatForm" class="chat-composer__form" enctype="multipart/form-data">
-                        <input type="hidden" name="recipient_id" value="{{ other_user.id }}">
+                        <input type="hidden" name="client_id" id="clientIdInput">
                         <label class="chat-composer__attach" title="Attach file">
                             <input type="file" name="attachment" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.zip,image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,application/zip">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                         </label>
-                        <textarea class="input-v2 chat-composer__input" name="content" placeholder="Write a message..." autocomplete="off" rows="1" maxlength="1000"></textarea>
+                        <textarea class="input-v2 chat-composer__input" name="content" placeholder="Write a message..." autocomplete="off" rows="1" maxlength="4000"></textarea>
                         <button type="submit" class="btn-v2 btn-v2--primary btn-v2--icon chat-composer__send" aria-label="Send message">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </button>
@@ -99,25 +131,64 @@
 
             <aside class="chat-profile">
                 <div class="chat-profile__head">
-                    {{ user_avatar(other_user, 'avatar-v2--lg', 'chat-profile__avatar') }}
+                    <div class="avatar-v2 avatar-v2--lg chat-profile__avatar">
+                        {% if active_conversation.avatar_url %}<img src="{{ active_conversation.avatar_url }}" alt="{{ active_conversation.title }}">{% else %}{{ active_conversation.avatar_initial }}{% endif %}
+                    </div>
                     <div>
-                        <div class="chat-profile__name">{{ other_user.full_name or other_user.username }}</div>
-                        <div class="chat-profile__handle">@{{ other_user.username }}</div>
+                        <div class="chat-profile__name">{{ active_conversation.title }}</div>
+                        <div class="chat-profile__handle">{{ active_conversation.subtitle }}</div>
                     </div>
                 </div>
 
+                {% if conversation.type == 'group' %}
+                <div class="chat-profile__section">
+                    <div class="chat-profile__label">Members</div>
+                    <div class="member-list">
+                        {% for member in members %}
+                        <div class="member-row">
+                            {{ user_avatar(member.user, 'avatar-v2 avatar-v2--sm') }}
+                            <div>
+                                <div class="member-row__name">{{ member.user.full_name or member.user.username }}</div>
+                                <div class="member-row__role">{{ member.role }}</div>
+                            </div>
+                            {% if active_conversation.can_manage and member.user_id != current_user.id %}
+                            <form method="POST" action="{{ url_for('messages.remove_member', public_id=conversation.public_id, user_id=member.user_id) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn-v2 btn-v2--secondary btn-v2--sm" type="submit">Remove</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if active_conversation.can_manage %}
+                <div class="chat-profile__section">
+                    <form method="POST" action="{{ url_for('messages.rename_group', public_id=conversation.public_id) }}" class="stack-v2">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <input class="input-v2" name="title" value="{{ conversation.title or '' }}" maxlength="160">
+                        <button class="btn-v2 btn-v2--secondary btn-v2--sm" type="submit">Rename</button>
+                    </form>
+                </div>
+                <div class="chat-profile__section">
+                    <form method="POST" action="{{ url_for('messages.add_member', public_id=conversation.public_id) }}" class="stack-v2">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <textarea class="input-v2" name="members" rows="3" placeholder="usernames to add"></textarea>
+                        <button class="btn-v2 btn-v2--secondary btn-v2--sm" type="submit">Add Members</button>
+                    </form>
+                </div>
+                {% endif %}
+                <div class="chat-profile__section">
+                    <form method="POST" action="{{ url_for('messages.leave_group', public_id=conversation.public_id) }}" onsubmit="return confirm('Leave this group?');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn-v2 btn-v2--secondary" type="submit">Leave Group</button>
+                    </form>
+                </div>
+                {% elif other_user %}
                 <div class="chat-profile__section">
                     <div class="chat-profile__label">About</div>
                     <div class="chat-profile__text">{{ other_user.headline or other_user.bio or 'No profile summary yet.' }}</div>
                 </div>
-
-                {% if other_user.location %}
-                <div class="chat-profile__section">
-                    <div class="chat-profile__label">Location</div>
-                    <div class="chat-profile__text">{{ other_user.location }}</div>
-                </div>
-                {% endif %}
-
                 {% if other_user.skills %}
                 <div class="chat-profile__section">
                     <div class="chat-profile__label">Skills</div>
@@ -128,6 +199,7 @@
                     </div>
                 </div>
                 {% endif %}
+                {% endif %}
             </aside>
         </div>
     </div>
@@ -135,17 +207,70 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="/socket.io/socket.io.js"></script>
 <script>
+    const conversationId = {{ conversation.public_id|tojson }};
+    const sendUrl = {{ url_for('messages.send_conversation_message', public_id=conversation.public_id)|tojson }};
+    const messagesUrl = {{ url_for('messages.conversation_messages', public_id=conversation.public_id)|tojson }};
+    const readUrl = {{ url_for('messages.read_conversation', public_id=conversation.public_id)|tojson }};
+    const typingUrl = {{ url_for('messages.typing', public_id=conversation.public_id)|tojson }};
+    const currentUserId = {{ current_user.id }};
+    const maxAttachmentBytes = 25 * 1024 * 1024;
     const chatMessages = document.getElementById('chatMessages');
     const chatForm = document.getElementById('chatForm');
     const chatInput = chatForm.querySelector('[name="content"]');
     const attachmentInput = chatForm.querySelector('[name="attachment"]');
+    const attachmentPreview = document.getElementById('attachmentPreview');
+    const attachmentName = document.getElementById('attachmentName');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const cancelUploadBtn = document.getElementById('cancelUploadBtn');
+    const clearAttachmentBtn = document.getElementById('clearAttachmentBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const connectionStatus = document.getElementById('connectionStatus');
+    let pendingXhr = null;
     let lastMessageId = {% if messages %}{{ messages[-1].id }}{% else %}0{% endif %};
+    let firstMessageId = {% if messages %}{{ messages[0].id }}{% else %}0{% endif %};
+    let typingTimer = null;
+    let socket = null;
+    const pendingMessages = new Map();
 
     scrollToLatest();
     resizeComposer();
+    markRead();
 
-    chatInput.addEventListener('input', resizeComposer);
+    try {
+        socket = io({ transports: ['websocket', 'polling'] });
+        socket.on('connect', () => {
+            setConnectionStatus('online', 'Online');
+            socket.emit('join_conversation', { conversation: conversationId });
+            pollMessages();
+        });
+        socket.on('disconnect', () => setConnectionStatus('offline', 'Offline - reconnecting'));
+        socket.on('connect_error', () => setConnectionStatus('offline', 'Polling fallback'));
+        socket.io?.on('reconnect_attempt', () => setConnectionStatus('offline', 'Reconnecting'));
+        socket.on('message:new', (payload) => {
+            if (!payload.message || document.querySelector(`[data-id="${payload.message.id}"]`)) return;
+            appendMessage(payload.message, payload.message.sender_id === currentUserId);
+            lastMessageId = Math.max(lastMessageId, payload.message.id);
+            markRead();
+        });
+        socket.on('conversation_typing', (payload) => showTyping(payload.username));
+        socket.on('conversation:typing', (payload) => showTyping(payload.username));
+        socket.on('message:read', () => refreshSentStatuses());
+    } catch (error) {
+        socket = null;
+        setConnectionStatus('offline', 'Polling fallback');
+    }
+
+    chatInput.addEventListener('input', () => {
+        resizeComposer();
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => {
+            fetch(typingUrl, { method: 'POST' }).catch(() => {});
+            if (socket) socket.emit('conversation_typing', { conversation: conversationId });
+        }, 250);
+    });
+
     chatInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
@@ -153,142 +278,287 @@
         }
     });
 
-    chatForm.addEventListener('submit', async (event) => {
+    attachmentInput.addEventListener('change', () => {
+        const file = attachmentInput.files[0];
+        if (!file) return hideAttachmentPreview();
+        if (file.size > maxAttachmentBytes) {
+            window.toast?.show('Attachment must be 25MB or smaller', 'error');
+            attachmentInput.value = '';
+            return hideAttachmentPreview();
+        }
+        attachmentName.textContent = `${file.name} (${formatBytes(file.size)})`;
+        attachmentPreview.hidden = false;
+    });
+
+    clearAttachmentBtn.addEventListener('click', hideAttachmentPreview);
+    cancelUploadBtn.addEventListener('click', () => {
+        if (pendingXhr) pendingXhr.abort();
+        pendingXhr = null;
+        cancelUploadBtn.hidden = true;
+        uploadProgress.hidden = true;
+    });
+
+    chatForm.addEventListener('submit', (event) => {
         event.preventDefault();
         const content = chatInput.value.trim();
-        if (!content && !attachmentInput.files.length) return;
+        const file = attachmentInput.files[0];
+        if (!content && !file) return;
 
-        const tempId = 'temp-' + Date.now();
+        const clientId = `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        document.getElementById('clientIdInput').value = clientId;
         const formData = new FormData(chatForm);
+        pendingMessages.set(clientId, formData);
         chatInput.value = '';
-        attachmentInput.value = '';
         resizeComposer();
 
         appendMessage({
-            id: tempId,
-            content: content,
-            created_at: new Date().toISOString(),
+            id: clientId,
+            client_id: clientId,
+            content,
+            sender_id: currentUserId,
             status: 'sending',
-            attachment_name: formData.get('attachment')?.name || ''
+            created_at: new Date().toISOString(),
+            attachment_name: file ? file.name : ''
         }, true);
 
-        try {
-            const response = await fetch("{{ url_for('messages.send_message') }}", {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRFToken': '{{ csrf_token() }}'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Message could not be sent');
-            }
-
-            const data = await response.json();
-            const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
-            if (tempMsg) {
-                tempMsg.querySelector('.message-status').innerHTML = sentIcon();
-                tempMsg.setAttribute('data-id', data.message.id);
-                lastMessageId = Math.max(lastMessageId, data.message.id);
-            }
-        } catch (error) {
-            const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
-            if (tempMsg) tempMsg.classList.add('message--failed');
-            window.toast?.show(error.message || 'Message could not be sent', 'error');
-        }
+        sendWithProgress(formData, clientId);
     });
+
+    document.getElementById('loadOlderBtn')?.addEventListener('click', async () => {
+        if (!firstMessageId) return;
+        const response = await fetch(`${messagesUrl}?before_id=${firstMessageId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.messages?.length) return;
+        const oldTop = chatMessages.scrollHeight;
+        data.messages.forEach((message) => prependMessage(message, message.sender_id === currentUserId));
+        firstMessageId = data.messages[0].id;
+        chatMessages.scrollTop = chatMessages.scrollHeight - oldTop;
+    });
+
+    function sendWithProgress(formData, clientId) {
+        updateMessageStatus(clientId, 'sending');
+        uploadProgress.value = 0;
+        uploadProgress.hidden = false;
+        cancelUploadBtn.hidden = false;
+        pendingXhr = new XMLHttpRequest();
+        pendingXhr.open('POST', sendUrl);
+        pendingXhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        pendingXhr.setRequestHeader('X-CSRFToken', window.HaradiBots.csrfToken);
+        pendingXhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) uploadProgress.value = Math.round((event.loaded / event.total) * 100);
+        };
+        pendingXhr.onreadystatechange = () => {
+            if (pendingXhr.readyState !== XMLHttpRequest.DONE) return;
+            uploadProgress.hidden = true;
+            cancelUploadBtn.hidden = true;
+            const temp = findMessageNode(clientId);
+            if (pendingXhr.status >= 200 && pendingXhr.status < 300) {
+                const data = JSON.parse(pendingXhr.responseText || '{}');
+                if (temp && data.message) {
+                    temp.setAttribute('data-id', data.message.id);
+                    temp.classList.remove('message--failed');
+                    temp.querySelector('.message-retry')?.remove();
+                    updateMessageStatus(data.message.id, data.message.status || 'sent');
+                    lastMessageId = Math.max(lastMessageId, data.message.id);
+                }
+                pendingMessages.delete(clientId);
+                hideAttachmentPreview();
+            } else {
+                markMessageFailed(clientId);
+                window.toast?.show('Message could not be sent', 'error');
+            }
+            pendingXhr = null;
+        };
+        pendingXhr.onabort = () => {
+            markMessageFailed(clientId);
+            window.toast?.show('Upload cancelled', 'info');
+        };
+        pendingXhr.send(formData);
+    }
+
+    function appendMessage(message, isSent) {
+        document.getElementById('chatEmpty')?.remove();
+        chatMessages.appendChild(buildMessageNode(message, isSent));
+        scrollToLatest();
+    }
+
+    function prependMessage(message, isSent) {
+        document.getElementById('chatEmpty')?.remove();
+        chatMessages.prepend(buildMessageNode(message, isSent));
+    }
+
+    function buildMessageNode(message, isSent) {
+        const wrapper = document.createElement('div');
+        wrapper.className = `message animate-fade-up ${isSent ? 'message--sent' : 'message--received'}`;
+        wrapper.dataset.id = message.id;
+
+        if (!isSent && message.sender_username) {
+            const sender = document.createElement('div');
+            sender.className = 'message__sender';
+            sender.textContent = `@${message.sender_username}`;
+            wrapper.appendChild(sender);
+        }
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message__bubble';
+        bubble.textContent = message.content || '';
+        wrapper.appendChild(bubble);
+
+        const attachment = buildAttachment(message);
+        if (attachment) wrapper.appendChild(attachment);
+
+        const meta = document.createElement('div');
+        meta.className = 'message__meta';
+        const time = document.createElement('time');
+        time.dateTime = message.created_at;
+        time.textContent = formatMessageTime(message.created_at);
+        meta.appendChild(time);
+        if (isSent) {
+            const status = document.createElement('span');
+            status.className = 'message-status';
+            status.textContent = message.status || 'sent';
+            status.setAttribute('aria-label', status.textContent);
+            meta.appendChild(status);
+        }
+        wrapper.appendChild(meta);
+        return wrapper;
+    }
+
+    function findMessageNode(id) {
+        return Array.from(document.querySelectorAll('.message')).find((node) => node.dataset.id === String(id));
+    }
+
+    function updateMessageStatus(id, statusText) {
+        const node = findMessageNode(id);
+        const status = node?.querySelector('.message-status');
+        if (!status) return;
+        status.textContent = statusText;
+        status.setAttribute('aria-label', statusText);
+    }
+
+    function markMessageFailed(clientId) {
+        const node = findMessageNode(clientId);
+        if (!node) return;
+        node.classList.add('message--failed');
+        updateMessageStatus(clientId, 'failed');
+        if (node.querySelector('.message-retry')) return;
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'message-retry';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', () => retryMessage(clientId));
+        node.appendChild(retry);
+    }
+
+    function retryMessage(clientId) {
+        const formData = pendingMessages.get(clientId);
+        if (!formData) {
+            window.toast?.show('Message retry data is no longer available', 'error');
+            return;
+        }
+        const node = findMessageNode(clientId);
+        node?.classList.remove('message--failed');
+        node?.querySelector('.message-retry')?.remove();
+        sendWithProgress(formData, clientId);
+    }
+
+    function buildAttachment(message) {
+        const url = message.attachment_url;
+        const name = message.attachment_name || '';
+        if (!url && !name) return null;
+        const link = document.createElement('a');
+        const isImage = (message.attachment_mime || '').startsWith('image/');
+        link.className = `message__attachment ${isImage ? 'message__attachment--image' : ''}`;
+        link.href = url || '#';
+        link.target = '_blank';
+        link.rel = 'noopener';
+        if (isImage && url) {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = name || 'Attachment';
+            link.appendChild(img);
+        }
+        const label = document.createElement('span');
+        label.textContent = name || 'Attachment';
+        link.appendChild(label);
+        return link;
+    }
+
+    async function pollMessages() {
+        try {
+            const response = await fetch(`${messagesUrl}?after_id=${lastMessageId}`);
+            if (!response.ok) return;
+            const data = await response.json();
+            (data.messages || []).forEach((message) => {
+                if (!document.querySelector(`[data-id="${message.id}"]`)) {
+                    appendMessage(message, message.sender_id === currentUserId);
+                }
+                lastMessageId = Math.max(lastMessageId, message.id);
+            });
+            if (data.messages?.length) markRead();
+        } catch (error) {}
+    }
+
+    async function markRead() {
+        try {
+            await fetch(readUrl, {
+                method: 'POST',
+                body: new URLSearchParams({ through_id: String(lastMessageId || '') })
+            });
+        } catch (error) {}
+    }
+
+    function refreshSentStatuses() {
+        document.querySelectorAll('.message--sent .message-status').forEach((node) => {
+            if (node.textContent !== 'read') node.textContent = 'read';
+        });
+    }
+
+    function showTyping(username) {
+        if (!username) return;
+        typingIndicator.textContent = `${username} is typing...`;
+        typingIndicator.hidden = false;
+        clearTimeout(window.chatTypingHideTimer);
+        window.chatTypingHideTimer = setTimeout(() => typingIndicator.hidden = true, 1600);
+    }
+
+    function setConnectionStatus(state, label) {
+        if (!connectionStatus) return;
+        connectionStatus.textContent = label;
+        connectionStatus.dataset.state = state;
+    }
 
     function resizeComposer() {
         chatInput.style.height = 'auto';
         chatInput.style.height = `${Math.min(chatInput.scrollHeight, 128)}px`;
     }
 
-    function escapeHtml(value) {
-        const div = document.createElement('div');
-        div.textContent = value || '';
-        return div.innerHTML;
-    }
-
-    function appendMessage(msg, isSent) {
-        document.getElementById('chatEmpty')?.remove();
-
-        const div = document.createElement('div');
-        div.className = `message animate-fade-up ${isSent ? 'message--sent' : 'message--received'}`;
-        div.setAttribute('data-id', msg.id);
-
-        const statusHtml = isSent
-            ? `<span class="message-status" aria-label="${msg.status === 'sending' ? 'Sending' : 'Sent'}">${msg.status === 'sending' ? '...' : (msg.is_read ? readIcon() : sentIcon())}</span>`
-            : '';
-
-        div.innerHTML = `
-            <div class="message__bubble">${escapeHtml(msg.content)}</div>
-            ${attachmentHtml(msg)}
-            <div class="message__meta">
-                <time class="js-local-time" datetime="${escapeHtml(msg.created_at)}" data-format="time">${formatMessageTime(msg.created_at)}</time>
-                ${statusHtml}
-            </div>
-        `;
-        chatMessages.appendChild(div);
-        scrollToLatest();
-    }
-
-    async function checkNewMessages() {
-        try {
-            const response = await fetch(`{{ url_for('messages.chat', username=other_user.username) }}?last_id=${lastMessageId}&ajax=1&_=${Date.now()}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (!response.ok) return;
-
-            const data = await response.json();
-            if (!data.messages || data.messages.length === 0) return;
-
-            let shouldPlaySound = false;
-            data.messages.forEach((msg) => {
-                if (!document.querySelector(`[data-id="${msg.id}"]`)) {
-                    if (msg.sender_id != {{ current_user.id }}) {
-                        appendMessage(msg, false);
-                        shouldPlaySound = true;
-                    }
-                }
-                lastMessageId = Math.max(lastMessageId, msg.id);
-            });
-            if (shouldPlaySound && typeof playNotificationSound === 'function') playNotificationSound();
-        } catch (error) {}
-    }
-
     function scrollToLatest() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
+    function hideAttachmentPreview() {
+        attachmentInput.value = '';
+        attachmentPreview.hidden = true;
+        uploadProgress.hidden = true;
+        cancelUploadBtn.hidden = true;
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return `${(bytes / Math.pow(1024, index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+    }
+
     function formatMessageTime(value) {
-        if (window.AuthFlow && typeof window.AuthFlow.formatLocalTime === 'function') {
-            return window.AuthFlow.formatLocalTime(value, 'time');
-        }
+        if (window.HaradiBots?.formatLocalTime) return window.HaradiBots.formatLocalTime(value, 'time');
         return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    function sentIcon() {
-        return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
-    }
-
-    function readIcon() {
-        return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><polyline points="20 11 12 19 8 15"/></svg>';
-    }
-
-    function attachmentHtml(msg) {
-        const url = msg.attachment_url;
-        const name = msg.attachment_name || '';
-        if (!url && !name) return '';
-        const isImage = (msg.attachment_mime || '').startsWith('image/');
-        const image = isImage && url ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(name || 'Attachment')}">` : '';
-        const href = url || '#';
-        return `<a class="message__attachment ${isImage ? 'message__attachment--image' : ''}" href="${escapeHtml(href)}" target="_blank" rel="noopener">${image}<span>${escapeHtml(name || 'Attachment')}</span></a>`;
-    }
-
     setInterval(() => {
-        if (document.visibilityState === 'visible') checkNewMessages();
-    }, 2000);
+        if (document.visibilityState === 'visible') pollMessages();
+    }, 5000);
 </script>
 {% endblock %}

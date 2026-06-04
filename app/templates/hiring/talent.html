@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Talent Search — AuthFlow{% endblock %}
+{% block title %}Talent Search — HaradiBots{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
 
 {% block content %}
@@ -32,7 +32,7 @@
                 {% for user in users.items %}
                 <a href="/{{ user.username }}" class="card-v2 hover-lift" style="text-decoration:none;padding:var(--sp-5);">
                     <div style="display:flex;align-items:center;gap:var(--sp-4);margin-bottom:var(--sp-4);">
-                        <div class="avatar-v2 avatar-v2--lg avatar-v2--ring">{{ user.username[0]|upper }}</div>
+                        {{ user_avatar(user, 'avatar-v2 avatar-v2--lg avatar-v2--ring') }}
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:center;gap:var(--sp-2);">
                                 <span style="font-size:var(--text-md);font-weight:600;color:var(--text-primary);">{{ user.full_name or user.username }}</span>

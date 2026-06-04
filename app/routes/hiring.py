@@ -9,6 +9,7 @@ from app.extensions import db
 from app.models import Company, Job, JobApplication, JobSave, User
 from app.services.content import generate_slug
 from app.services.notifications import create_notification
+from app.utils.rate_limit import rate_limit
 
 hiring_bp = Blueprint("hiring", __name__)
 
@@ -90,8 +91,9 @@ def job_detail(slug):
 
 @hiring_bp.post("/hiring/apply/<int:job_id>")
 @login_required
+@rate_limit(max_calls=20, window_seconds=600, scope="job-apply")
 def apply_job(job_id):
-    job = Job.query.get_or_404(job_id)
+    job = db.get_or_404(Job, job_id)
     if job.status != "active":
         flash("This job is no longer accepting applications.", "warning")
         return redirect(url_for("hiring.job_detail", slug=job.slug))
@@ -158,7 +160,7 @@ def my_applications():
 @hiring_bp.get("/hiring/jobs/<int:job_id>/applications")
 @login_required
 def job_applications(job_id):
-    job = Job.query.get_or_404(job_id)
+    job = db.get_or_404(Job, job_id)
     if not job.user_can_manage(current_user):
         abort(403)
     page = request.args.get("page", 1, type=int)
@@ -179,7 +181,7 @@ def job_applications(job_id):
 @hiring_bp.post("/hiring/applications/<int:application_id>/status")
 @login_required
 def update_application_status(application_id):
-    application = JobApplication.query.get_or_404(application_id)
+    application = db.get_or_404(JobApplication, application_id)
     job = application.job
     if not job.user_can_manage(current_user):
         abort(403)
@@ -215,8 +217,9 @@ def update_application_status(application_id):
 
 @hiring_bp.post("/hiring/save/<int:job_id>")
 @login_required
+@rate_limit(max_calls=60, window_seconds=300, scope="job-save")
 def save_job(job_id):
-    job = Job.query.get_or_404(job_id)
+    job = db.get_or_404(Job, job_id)
     existing = JobSave.query.filter_by(job_id=job.id, user_id=current_user.id).first()
     if existing:
         db.session.delete(existing)
@@ -230,6 +233,7 @@ def save_job(job_id):
 @hiring_bp.route("/hiring/post", methods=["GET", "POST"])
 @hiring_bp.route("/upload/job", methods=["GET", "POST"])
 @login_required
+@rate_limit(max_calls=10, window_seconds=600, scope="job-post")
 def post_job():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
@@ -283,7 +287,7 @@ def post_job():
 @hiring_bp.post("/hiring/<int:job_id>/delete")
 @login_required
 def delete_job(job_id):
-    job = Job.query.get_or_404(job_id)
+    job = db.get_or_404(Job, job_id)
     company_owner_id = job.company.created_by_id if job.company else None
     if job.posted_by_id != current_user.id and company_owner_id != current_user.id and not current_user.is_admin:
         flash("You can only delete jobs you posted.", "error")

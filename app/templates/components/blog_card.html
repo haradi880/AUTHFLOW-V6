@@ -11,7 +11,7 @@
     <div class="blog-card-v2__body">
         <div class="blog-card-v2__meta">
             <a href="/{{ blog.author.username }}" class="blog-card-v2__author" onclick="event.stopPropagation();">
-                <div class="avatar-v2 avatar-v2--xs">{{ blog.author.username[0] | upper }}</div>
+                {{ user_avatar(blog.author, 'avatar-v2 avatar-v2--xs') }}
                 <span>{{ blog.author.full_name or blog.author.username }}</span>
             </a>
             <span class="blog-card-v2__dot">·</span>

@@ -44,7 +44,8 @@ def calculate_reading_time(content):
 def render_markdown(content):
     html = markdown(content or "", extensions=["fenced_code", "tables", "codehilite"])
     cleaned = bleach.clean(html, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRIBUTES, strip=True)
-    return Markup(cleaned)
+    # bleach.clean sanitizes Markdown HTML before marking it safe for templates.
+    return Markup(cleaned)  # nosec B704
 
 
 def sync_tags(instance, tags_string):

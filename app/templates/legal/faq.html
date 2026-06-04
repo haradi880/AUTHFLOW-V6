@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}FAQ - AuthFlow Help Center{% endblock %}
-{% block meta_desc %}Find answers about AuthFlow accounts, suspended account recovery, OTP login, blogs, projects, DevLogs, XP, badges, hiring, uploads, privacy, and support.{% endblock %}
+{% block title %}FAQ - HaradiBots Help Center{% endblock %}
+{% block meta_desc %}Find answers about HaradiBots accounts, suspended account recovery, OTP login, blogs, projects, DevLogs, XP, badges, hiring, uploads, privacy, and support.{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/faq.css') }}">
@@ -28,7 +28,7 @@
             <section class="faq-hero">
                 <div>
                     <span class="support-kicker">Documentation</span>
-                    <h1>Answers for using AuthFlow without getting stuck.</h1>
+                    <h1>Answers for using HaradiBots without getting stuck.</h1>
                     <p>Search by topic or filter by category. If your account is suspended, deleted, or you cannot receive OTP email, use the support request flow so an admin can review it.</p>
                 </div>
                 <div class="faq-quick-card">
@@ -56,7 +56,7 @@
             </section>
 
             {% set faqs = [
-                ('account', 'What is AuthFlow?', 'AuthFlow is a developer and robotics creator platform for publishing blogs, sharing projects, posting DevLogs, building a portfolio, collaborating, messaging, hiring, and earning reputation.'),
+                ('account', 'What is HaradiBots?', 'HaradiBots is a developer and robotics creator platform for publishing blogs, sharing projects, posting DevLogs, building a portfolio, collaborating, messaging, hiring, and earning reputation.'),
                 ('account', 'How do I create and verify an account?', 'Create an account from the register page, then enter the OTP sent to your email. You cannot fully sign in until your email is verified.'),
                 ('account', 'What should I do if OTP email does not arrive?', 'Check spam and promotions first. Then use the resend OTP button. If email still fails, open a support request with the login or OTP category and include your account email.'),
                 ('account', 'What happens if my account is suspended?', 'A suspended account cannot browse the logged-in app. It is redirected to a suspended-account page with a Contact Admin button. Submit a support request with your username/email for review.'),

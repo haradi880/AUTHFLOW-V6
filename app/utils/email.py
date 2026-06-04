@@ -33,7 +33,7 @@ def _absolute_public_url(value=""):
 def send_email(subject, recipient, template, **kwargs):
     """Send a rendered HTML email through the shared delivery chain."""
     app = current_app._get_current_object()
-    kwargs.setdefault("app_name", app.config.get("APP_NAME", "AUTHFLOW"))
+    kwargs.setdefault("app_name", app.config.get("APP_NAME", "HaradiBots"))
     kwargs.setdefault("site_url", _absolute_public_url())
     kwargs.setdefault("settings_url", _absolute_public_url("/settings"))
     if kwargs.get("link"):
@@ -42,7 +42,7 @@ def send_email(subject, recipient, template, **kwargs):
     try:
         html_body = render_template(f"email/{template}.html", **kwargs)
     except Exception:
-        html_body = kwargs.get("body", "Notification from AuthFlow")
+        html_body = kwargs.get("body", "Notification from HaradiBots")
     text_body = kwargs.get("text_body") or _html_to_text(html_body)
 
     if not app.config.get("EMAIL_ASYNC", True) or app.config.get("MAIL_SUPPRESS_SEND"):

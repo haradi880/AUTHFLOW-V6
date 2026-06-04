@@ -1,34 +1,45 @@
 import logging
+import json
 import os
 import secrets
+import sys
 import time
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+import click
+from flask import Flask, abort, g, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+from flask.sessions import SecureCookieSessionInterface
 from flask_login import current_user
 from flask_wtf.csrf import CSRFProtect
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from jinja2 import TemplateNotFound
+from markupsafe import Markup, escape
 from sqlalchemy import inspect
 
 from config import config_by_name
-from app.extensions import db, login_manager, migrate
+from app.extensions import db, limiter, login_manager, migrate
 from app.realtime import init_realtime
 
 # Initialize security extensions
 csrf = CSRFProtect()
-limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
-)
+
+
+class HaradiBotsSessionInterface(SecureCookieSessionInterface):
+    """Avoid Set-Cookie churn for anonymous public pages with no incoming session."""
+
+    def save_session(self, app, session_obj, response):
+        if not session_obj and session_obj.modified:
+            cookie_name = self.get_cookie_name(app)
+            if not request.cookies.get(cookie_name):
+                return
+        return super().save_session(app, session_obj, response)
 
 
 def create_app(config_name=None):
     app = Flask(__name__)
     config_name = config_name or os.getenv("FLASK_ENV") or os.getenv("APP_ENV") or "default"
     app.config.from_object(config_by_name.get(config_name, config_by_name["default"]))
+    app.session_interface = HaradiBotsSessionInterface()
 
     init_extensions(app)
     register_blueprints(app)
@@ -52,6 +63,14 @@ def init_extensions(app):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
+    running_production_check = "production-check" in sys.argv
+    if (
+        not running_production_check
+        and not app.config.get("TESTING")
+        and not app.debug
+        and app.config.get("RATELIMIT_STORAGE_URI") == "memory://"
+    ):
+        raise RuntimeError("Production rate limiting requires RATELIMIT_STORAGE_URI backed by Redis.")
     limiter.init_app(app)
     
     login_manager.login_view = "auth.login"
@@ -106,6 +125,12 @@ def register_blueprints(app):
 
 def register_security(app):
     """Register security middleware and protections."""
+
+    @app.before_request
+    def attach_observability_context():
+        from app.services.observability import start_request_timer
+
+        start_request_timer()
     
     @app.before_request
     def sync_login_session():
@@ -121,7 +146,11 @@ def register_security(app):
             "main.submit_support_ticket",
             "main.robots_txt",
             "main.sitemap",
+            "main.sitemap_index",
+            "main.social_card",
             "main.healthz",
+            "main.readyz",
+            "main.metrics",
         }
         session_user_id = session.get("_user_id")
         if session_user_id:
@@ -171,6 +200,24 @@ def register_security(app):
     @app.after_request
     def add_security_headers(response):
         """Add security headers to all responses."""
+        from app.services.observability import record_request, structured_log
+
+        request_id = getattr(g, "request_id", None)
+        if request_id:
+            response.headers["X-Request-ID"] = request_id
+
+        duration = record_request(response)
+        if app.config.get("REQUEST_LOGGING_ENABLED") and request.endpoint not in {"static"}:
+            structured_log(
+                app.logger,
+                logging.INFO if response.status_code < 500 else logging.ERROR,
+                "http_request",
+                status=response.status_code,
+                endpoint=request.endpoint,
+                duration_ms=round(duration * 1000, 2),
+                user_id=current_user.get_id() if current_user.is_authenticated else None,
+            )
+
         # Security headers
         security_headers = app.config.get("SECURITY_HEADERS", {})
         for header, value in security_headers.items():
@@ -180,9 +227,8 @@ def register_security(app):
         if not app.debug:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         
-        script_src = "'self' 'unsafe-inline'"
-        if app.debug:
-            script_src = f"{script_src} 'unsafe-eval'"
+        script_src = "'self' 'unsafe-inline' https://cdn.jsdelivr.net"
+        upgrade_insecure = "upgrade-insecure-requests; " if not app.debug else ""
 
         response.headers.setdefault(
             "Content-Security-Policy",
@@ -192,8 +238,14 @@ def register_security(app):
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "img-src 'self' data: https:; "
                 "font-src 'self' data: https://fonts.gstatic.com; "
+                "media-src 'self' https://assets.mixkit.co; "
                 "connect-src 'self' ws: wss:; "
+                "object-src 'none'; "
                 "base-uri 'self'; "
+                "form-action 'self'; "
+                "frame-src 'self'; "
+                "manifest-src 'self'; "
+                f"{upgrade_insecure}"
                 "frame-ancestors 'self';"
             )
         )
@@ -222,7 +274,7 @@ def register_security(app):
                 response.headers["Pragma"] = "no-cache"
                 response.headers["Expires"] = "0"
             else:
-                response.headers["Cache-Control"] = "public, max-age=120"
+                response.headers.setdefault("Cache-Control", "public, max-age=120")
         
         return response
 
@@ -230,9 +282,42 @@ def register_security(app):
 def register_template_helpers(app):
     @app.context_processor
     def inject_globals():
-        from app.models import Notification, Message, Bookmark
+        from app.models import Notification, Message, Bookmark, ConversationMember
         from flask_login import current_user
         from flask_wtf.csrf import generate_csrf
+
+        def user_avatar(user, classes="avatar-v2 avatar-v2--sm", style="", href=None, title=None):
+            username = getattr(user, "username", "") or "User"
+            avatar_name = getattr(user, "avatar", None)
+            avatar_url = ""
+            if avatar_name and avatar_name != "default.jpg":
+                try:
+                    avatar_url = getattr(user, "avatar_url", "") or ""
+                except RuntimeError:
+                    avatar_url = ""
+
+            if avatar_url:
+                # URL and alt text are escaped before markup wrapping.
+                inner = Markup(  # nosec B704
+                    '<img src="{}" alt="{}" loading="lazy">'.format(
+                        escape(avatar_url),
+                        escape(username),
+                    )
+                )
+            else:
+                inner = escape(username[:1].upper() if username else "?")
+
+            tag = "a" if href else "div"
+            attrs = [f'class="{escape(classes)}"']
+            if style:
+                attrs.append(f'style="{escape(style)}"')
+            if href:
+                attrs.append(f'href="{escape(href)}"')
+            if title:
+                attrs.append(f'title="{escape(title)}"')
+                attrs.append(f'aria-label="{escape(title)}"')
+
+            return Markup(f"<{tag} {' '.join(attrs)}>{inner}</{tag}>")  # nosec B704
         
         counts = {'notifications': 0, 'messages': 0, 'bookmarks': 0}
         if current_user.is_authenticated:
@@ -242,21 +327,87 @@ def register_template_helpers(app):
             if isinstance(cached_counts, dict) and cache_age < 15:
                 counts.update({key: int(cached_counts.get(key) or 0) for key in counts})
             else:
-                counts['notifications'] = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
-                counts['messages'] = Message.query.filter_by(recipient_id=current_user.id, is_read=False).count()
-                counts['bookmarks'] = Bookmark.query.filter_by(user_id=current_user.id).count()
+                notification_count = db.session.query(db.func.count(Notification.id)).filter(
+                    Notification.user_id == current_user.id,
+                    Notification.is_read.is_(False),
+                ).scalar_subquery()
+                conversation_message_count = db.session.query(db.func.count(Message.id)).join(
+                    ConversationMember,
+                    Message.conversation_id == ConversationMember.conversation_id,
+                ).filter(
+                    ConversationMember.user_id == current_user.id,
+                    ConversationMember.is_active.is_(True),
+                    Message.sender_id != current_user.id,
+                    db.or_(
+                        ConversationMember.last_read_message_id.is_(None),
+                        Message.id > ConversationMember.last_read_message_id,
+                    ),
+                ).scalar_subquery()
+                legacy_message_count = db.session.query(db.func.count(Message.id)).filter(
+                    Message.conversation_id.is_(None),
+                    Message.recipient_id == current_user.id,
+                    Message.is_read.is_(False),
+                ).scalar_subquery()
+                bookmark_count = db.session.query(db.func.count(Bookmark.id)).filter(
+                    Bookmark.user_id == current_user.id,
+                ).scalar_subquery()
+                notif_count, msg_count, saved_count = db.session.query(
+                    notification_count,
+                    conversation_message_count + legacy_message_count,
+                    bookmark_count,
+                ).one()
+                counts['notifications'] = notif_count
+                counts['messages'] = msg_count
+                counts['bookmarks'] = saved_count
                 session["unread_counts_cache"] = counts
                 session["unread_counts_cached_at"] = now
             
-        # Flask-WTF provides CSRF token automatically
+        def public_url_for(endpoint, **values):
+            values.pop("_external", None)
+            values.pop("_scheme", None)
+            path = url_for(endpoint, **values)
+            base = (app.config.get("PUBLIC_BASE_URL") or request.host_url).rstrip("/")
+            return f"{base}{path}" if path.startswith("/") else path
+
+        def current_public_url():
+            endpoint = request.endpoint
+            if not endpoint or endpoint == "static":
+                return request.base_url
+            try:
+                return public_url_for(endpoint, **(request.view_args or {}))
+            except Exception:
+                return request.base_url
+
+        csrf_public_endpoints = {
+            "auth.login",
+            "auth.register",
+            "auth.verify_signup",
+            "auth.forgot_password",
+            "auth.reset_verify",
+            "auth.new_password",
+            "auth.account_suspended",
+            "auth.account_deleted",
+            "main.support",
+            "main.submit_support_ticket",
+            "main.support_donate",
+        }
+        csrf_required = current_user.is_authenticated or request.endpoint in csrf_public_endpoints
+
         return {
             "csrf_token": generate_csrf,
-            "unread_counts": counts
+            "unread_counts": counts,
+            "user_avatar": user_avatar,
+            "csrf_required": csrf_required,
+            "public_url_for": public_url_for,
+            "current_public_url": current_public_url,
+            "default_og_image_url": public_url_for("main.social_card"),
         }
 
     @app.template_filter("upload_url")
     def upload_url(filename, folder):
-        return url_for("uploaded_file", folder=folder, filename=filename) if filename else ""
+        from app.utils.uploads import public_upload_url
+
+        return public_upload_url(folder, filename)
 
 
 def register_upload_route(app):
@@ -264,7 +415,7 @@ def register_upload_route(app):
     def uploaded_file(folder, filename):
         from app.utils.uploads import supabase_public_url
 
-        allowed_folders = {"avatars", "banners", "blogs", "projects", "devlogs", "messages"}
+        allowed_folders = {"avatars", "banners", "blogs", "projects", "devlogs"}
         if folder not in allowed_folders:
             abort(404)
         if Path(filename).name != filename:
@@ -316,28 +467,332 @@ def register_cli(app):
 
     @app.cli.command("init-db")
     def init_db_command():
-        db.create_all()
+        from flask_migrate import upgrade as migrate_upgrade
+
+        migrate_upgrade()
         seed_initial_data()
-        print("Database initialized.")
+        print("Database migrated and initialized.")
 
     @app.cli.command("deploy-db")
     def deploy_db_command():
         """Prepare the database safely for container deployments."""
-        from flask_migrate import stamp as migrate_stamp, upgrade as migrate_upgrade
-
-        inspector = inspect(db.engine)
-        user_tables = set(inspector.get_table_names()) - {"alembic_version"}
-
-        if not user_tables:
-            db.create_all()
-            seed_initial_data()
-            migrate_stamp(revision="head")
-            print("Empty database bootstrapped and stamped at migration head.")
-            return
+        from flask_migrate import upgrade as migrate_upgrade
 
         migrate_upgrade()
         seed_initial_data()
         print("Database migrations applied.")
+
+    @app.cli.command("production-check")
+    @click.option("--json", "as_json", is_flag=True, help="Print machine-readable JSON.")
+    @click.option("--warnings-as-errors", is_flag=True, help="Return a failure when warnings are present.")
+    def production_check_command(as_json=False, warnings_as_errors=False):
+        """Validate deployment-critical production configuration."""
+        from app.services.production_checks import production_check_summary, run_production_checks
+
+        checks = run_production_checks(app.config)
+        summary = production_check_summary(checks)
+        payload = {
+            "summary": summary,
+            "checks": [
+                {
+                    "key": check.key,
+                    "status": check.status,
+                    "message": check.message,
+                    "detail": check.detail,
+                }
+                for check in checks
+            ],
+        }
+
+        if as_json:
+            click.echo(json.dumps(payload, indent=2))
+        else:
+            for check in checks:
+                label = check.status.upper()
+                click.echo(f"[{label}] {check.key}: {check.message}")
+                if check.status != "pass" and check.detail:
+                    click.echo(f"       {check.detail}")
+            click.echo(
+                f"Summary: {summary['total']} checks, "
+                f"{summary['failures']} failures, {summary['warnings']} warnings."
+            )
+
+        if summary["failures"] or (warnings_as_errors and summary["warnings"]):
+            raise click.ClickException("Production readiness checks failed.")
+
+    @app.cli.command("backup-verify")
+    @click.option("--name", help="Backup filename under the configured local backup directory.")
+    @click.option("--path", "backup_path", type=click.Path(exists=True, dir_okay=False), help="Explicit backup zip path.")
+    @click.option("--json", "as_json", is_flag=True, help="Print machine-readable JSON.")
+    def backup_verify_command(name=None, backup_path=None, as_json=False):
+        """Verify a HaradiBots backup archive manifest and checksums."""
+        from app.routes.admin import _safe_backup_path, _verify_backup_zip
+
+        if backup_path:
+            target = Path(backup_path).resolve()
+        elif name:
+            target = _safe_backup_path(name)
+        else:
+            raise click.ClickException("Pass --name local-backup.zip or --path C:\\path\\backup.zip.")
+        if not target:
+            raise click.ClickException("Backup archive was not found or path is not allowed.")
+
+        result = _verify_backup_zip(target)
+        if as_json:
+            click.echo(json.dumps(result, indent=2, default=str))
+        else:
+            manifest = result.get("manifest") or {}
+            click.echo(f"Backup: {target.name}")
+            click.echo(f"Status: {'ok' if result['ok'] else 'failed'}")
+            if manifest:
+                click.echo(f"Created: {manifest.get('created_at')}")
+                click.echo(f"Alembic: {manifest.get('alembic_revision') or 'unknown'}")
+                click.echo(f"Files: {manifest.get('file_count', 0)}")
+                click.echo(f"Bytes: {manifest.get('total_size', 0)}")
+            for warning in result.get("warnings", []):
+                click.echo(f"Warning: {warning}")
+            for error in result.get("errors", []):
+                click.echo(f"Error: {error}")
+        if not result["ok"]:
+            raise click.ClickException("Backup verification failed.")
+
+    @app.cli.command("backup-drill")
+    @click.option("--skip-database", is_flag=True, help="Do not request a database dump/copy.")
+    @click.option("--skip-uploads", is_flag=True, help="Do not include uploaded files.")
+    @click.option("--skip-logs", is_flag=True, help="Do not include logs/email outbox.")
+    @click.option("--upload-cloud", is_flag=True, help="Upload the verified archive to configured Supabase backup storage.")
+    @click.option("--json", "as_json", is_flag=True, help="Print machine-readable JSON.")
+    def backup_drill_command(skip_database=False, skip_uploads=False, skip_logs=False, upload_cloud=False, as_json=False):
+        """Create a backup archive, verify it, and optionally upload it to cloud storage."""
+        from app.routes.admin import _create_backup_zip, _upload_backup_to_supabase, _verify_backup_zip
+
+        zip_path = _create_backup_zip(
+            include_database=not skip_database,
+            include_uploads=not skip_uploads,
+            include_logs=not skip_logs,
+        )
+        verification = _verify_backup_zip(zip_path)
+        cloud = {"requested": bool(upload_cloud), "uploaded": False, "message": ""}
+        if verification["ok"] and upload_cloud:
+            try:
+                uploaded, message = _upload_backup_to_supabase(zip_path)
+                cloud.update({"uploaded": bool(uploaded), "message": message or ""})
+            except Exception as exc:
+                cloud.update({"uploaded": False, "message": f"{exc.__class__.__name__}: {exc}"})
+
+        manifest = verification.get("manifest") or {}
+        payload = {
+            "ok": bool(verification["ok"] and (not upload_cloud or cloud["uploaded"])),
+            "path": str(zip_path),
+            "name": zip_path.name,
+            "size": zip_path.stat().st_size if zip_path.exists() else 0,
+            "verification": verification,
+            "cloud": cloud,
+            "summary": {
+                "file_count": manifest.get("file_count", 0),
+                "total_size": manifest.get("total_size", 0),
+                "database_dump_present": manifest.get("database", {}).get("dump_present"),
+                "alembic_revision": manifest.get("alembic_revision"),
+            },
+        }
+
+        if as_json:
+            click.echo(json.dumps(payload, indent=2, default=str))
+        else:
+            click.echo(f"Backup: {payload['name']}")
+            click.echo(f"Path: {payload['path']}")
+            click.echo(f"Status: {'ok' if payload['ok'] else 'failed'}")
+            click.echo(f"Files: {payload['summary']['file_count']}")
+            click.echo(f"Bytes: {payload['summary']['total_size']}")
+            click.echo(f"Database dump: {'yes' if payload['summary']['database_dump_present'] else 'no'}")
+            if cloud["requested"]:
+                click.echo(f"Cloud upload: {'ok' if cloud['uploaded'] else 'failed'}")
+                if cloud["message"]:
+                    click.echo(f"Cloud message: {cloud['message']}")
+            for warning in verification.get("warnings", []):
+                click.echo(f"Warning: {warning}")
+            for error in verification.get("errors", []):
+                click.echo(f"Error: {error}")
+
+        if not verification["ok"]:
+            raise click.ClickException("Backup drill failed verification.")
+        if upload_cloud and not cloud["uploaded"]:
+            raise click.ClickException("Backup drill cloud upload failed.")
+
+    @app.cli.command("smoke-check")
+    @click.option("--base-url", help="Optional deployed base URL. Defaults to the local Flask app test client.")
+    @click.option("--iterations", default=1, show_default=True, type=int, help="Requests per target.")
+    @click.option("--timeout", default=10, show_default=True, type=float, help="External request timeout in seconds.")
+    @click.option("--max-p95-ms", default=1000, show_default=True, type=float, help="Maximum p95 latency per target.")
+    @click.option("--json", "as_json", is_flag=True, help="Print machine-readable JSON.")
+    def smoke_check_command(base_url=None, iterations=1, timeout=10, max_p95_ms=1000, as_json=False):
+        """Run lightweight route smoke and latency checks."""
+        from app.services.smoke import run_smoke_targets, smoke_summary
+
+        results = run_smoke_targets(
+            app=None if base_url else app,
+            base_url=base_url,
+            iterations=iterations,
+            timeout=timeout,
+            max_p95_ms=max_p95_ms,
+        )
+        summary = smoke_summary(results)
+        payload = {
+            "summary": summary,
+            "results": [
+                {
+                    "path": result.path,
+                    "ok": result.ok,
+                    "expected": result.expected,
+                    "statuses": result.statuses,
+                    "durations_ms": result.durations_ms,
+                    "p95_ms": result.p95_ms,
+                    "error": result.error,
+                }
+                for result in results
+            ],
+        }
+
+        if as_json:
+            click.echo(json.dumps(payload, indent=2, default=str))
+        else:
+            for result in results:
+                status = "ok" if result.ok else "failed"
+                click.echo(
+                    f"{status} {result.path} statuses={result.statuses} "
+                    f"p95={result.p95_ms}ms expected={result.expected}"
+                )
+                if result.error:
+                    click.echo(f"  error: {result.error}")
+            click.echo(f"Summary: {summary['total']} targets, {summary['failures']} failures.")
+
+        if summary["failures"]:
+            raise click.ClickException("Smoke checks failed.")
+
+    @app.cli.command("load-check")
+    @click.option("--base-url", help="Optional deployed base URL. Defaults to the local Flask app test client.")
+    @click.option("--requests-per-target", default=10, show_default=True, type=int, help="Requests per route target.")
+    @click.option("--concurrency", default=4, show_default=True, type=int, help="Concurrent workers per target.")
+    @click.option("--timeout", default=10, show_default=True, type=float, help="External request timeout in seconds.")
+    @click.option("--max-p95-ms", default=1500, show_default=True, type=float, help="Maximum p95 latency per target.")
+    @click.option("--target", "target_paths", multiple=True, help="Limit checks to a route path. May be passed multiple times.")
+    @click.option("--json", "as_json", is_flag=True, help="Print machine-readable JSON.")
+    def load_check_command(base_url=None, requests_per_target=10, concurrency=4, timeout=10, max_p95_ms=1500, target_paths=(), as_json=False):
+        """Run a small concurrent route load regression check."""
+        from app.services.smoke import DEFAULT_SMOKE_TARGETS
+        from app.services.load import load_summary, run_load_targets
+
+        targets = None
+        if target_paths:
+            by_path = {target["path"]: target for target in DEFAULT_SMOKE_TARGETS}
+            targets = [by_path.get(path, {"path": path, "expected": {200}}) for path in target_paths]
+
+        results = run_load_targets(
+            app=None if base_url else app,
+            base_url=base_url,
+            requests_per_target=requests_per_target,
+            concurrency=concurrency,
+            timeout=timeout,
+            max_p95_ms=max_p95_ms,
+            targets=targets,
+        )
+        summary = load_summary(results)
+        payload = {
+            "summary": summary,
+            "results": [
+                {
+                    "path": result.path,
+                    "ok": result.ok,
+                    "expected": result.expected,
+                    "requests": result.requests,
+                    "concurrency": result.concurrency,
+                    "statuses": result.statuses,
+                    "errors": result.errors,
+                    "min_ms": result.min_ms,
+                    "avg_ms": result.avg_ms,
+                    "p50_ms": result.p50_ms,
+                    "p95_ms": result.p95_ms,
+                    "max_ms": result.max_ms,
+                    "duration_ms": result.duration_ms,
+                    "rps": result.rps,
+                }
+                for result in results
+            ],
+        }
+
+        if as_json:
+            click.echo(json.dumps(payload, indent=2, default=str))
+        else:
+            for result in results:
+                status = "ok" if result.ok else "failed"
+                click.echo(
+                    f"{status} {result.path} requests={result.requests} concurrency={result.concurrency} "
+                    f"statuses={result.statuses} p95={result.p95_ms}ms rps={result.rps}"
+                )
+                for error in result.errors:
+                    click.echo(f"  error: {error}")
+            click.echo(
+                f"Summary: {summary['total']} targets, {summary['failures']} failures, "
+                f"{summary['completed_requests']}/{summary['total_requests']} completed, "
+                f"aggregate_rps={summary['aggregate_rps']}."
+            )
+
+        if summary["failures"]:
+            raise click.ClickException("Load checks failed.")
+
+    @app.cli.command("email-check")
+    @click.option("--to", "to_email", help="Send a real test email to this address after printing config.")
+    @click.option(
+        "--backend",
+        type=click.Choice(["auto", "smtp", "backup_smtp", "resend", "sendgrid", "file"]),
+        help="Temporarily test one backend without editing environment variables.",
+    )
+    def email_check_command(to_email=None, backend=None):
+        """Print sanitized email config and optionally send a test email."""
+        from app.utils.emailer import send_email
+
+        if backend:
+            app.config["EMAIL_BACKEND"] = backend
+
+        def redacted_email(value):
+            value = value or ""
+            if "@" not in value:
+                return "<empty>" if not value else "<set>"
+            local, domain = value.rsplit("@", 1)
+            return f"{local[:1]}***@{domain}"
+
+        keys = [
+            "EMAIL_BACKEND",
+            "EMAIL_DELIVERY_ORDER",
+            "EMAIL_FILE_FALLBACK",
+            "EMAIL_ASYNC",
+            "MAIL_SERVER",
+            "MAIL_PORT",
+            "MAIL_USE_TLS",
+            "MAIL_USE_SSL",
+            "MAIL_FORCE_IPV4",
+            "MAIL_DEFAULT_SENDER",
+        ]
+        for key in keys:
+            value = app.config.get(key)
+            if key.endswith("_FROM") or key.endswith("_SENDER"):
+                value = redacted_email(value)
+            click.echo(f"{key}={value}")
+        for key in ("MAIL_USERNAME", "MAIL_PASSWORD"):
+            click.echo(f"{key}={'set' if app.config.get(key) else 'missing'}")
+
+        if not to_email:
+            click.echo("No email sent. Pass --to you@example.com to send a real test.")
+            return
+
+        ok = send_email(
+            to_email,
+            f"{app.config.get('APP_NAME', 'HaradiBots')} email check",
+            "If you received this, transactional email delivery is working.",
+        )
+        if not ok:
+            raise click.ClickException("Email delivery failed. Check service logs for backend errors.")
+        click.echo(f"Test email sent to {to_email}.")
 
 
 def register_error_handlers(app):
@@ -364,7 +819,7 @@ def register_error_handlers(app):
     @app.errorhandler(500)
     def internal_error(error):
         db.session.rollback()
-        app.logger.exception("Unhandled server error")
+        app.logger.exception("Unhandled server error", extra={"request_id": getattr(g, "request_id", None)})
         if _template_exists(app, "errors/500.html"):
             return render_template("errors/500.html"), 500
         return "Internal server error", 500
@@ -466,9 +921,6 @@ def ensure_runtime_schema(app):
                 for name, column_type in columns.items():
                     if name not in existing_columns:
                         connection.exec_driver_sql(f"ALTER TABLE {table_name} ADD COLUMN {name} {column_type}")
-
-        if not inspector.has_table("support_tickets"):
-            db.create_all()
 
 
 def configure_logging(app):

@@ -42,11 +42,11 @@ Exempt:
 Routes whose path starts with /api/
 ```
 
-Tokens are stored in the session and exposed to templates through `csrf_token()`. `base.html` injects missing hidden CSRF inputs into POST forms and adds `X-CSRFToken` to non-GET fetch calls.
+Tokens are stored in the session and exposed to templates through `csrf_token()`. `base.html` injects missing hidden CSRF inputs into POST forms and adds `X-CSRFToken` to non-GET fetch calls only on authenticated pages and public pages that actually need POST forms, so indexable read-only pages do not create anonymous CSRF sessions.
 
 ### Rate Limiting
 
-The in-memory limiter protects selected routes:
+Flask-Limiter protects selected routes. Development may use `memory://`, but production startup requires Redis or another shared storage backend through `RATELIMIT_STORAGE_URI`.
 
 | Scope | Routes |
 |---|---|
@@ -59,10 +59,12 @@ The in-memory limiter protects selected routes:
 | `report` | User report |
 | `block` | User block |
 | `comments` | Blog comments |
-| `messages` | Direct messages |
+| `api` | Legacy JSON API login and current-user endpoints |
+| `messages` | Conversation sends, reads, typing events, group actions, and searches |
+| `uploads` | Message attachments |
 | `follow` | Follow/unfollow |
 
-Important: this limiter is process-local. Use Redis or another shared store before running multiple workers or servers.
+Production must use the same shared limiter store across all web and worker processes.
 
 ### Upload Safety
 
@@ -71,12 +73,17 @@ Upload protections:
 - Folder allowlist: `avatars`, `banners`, `blogs`, `projects`, `devlogs`.
 - Extension allowlist: `png`, `jpg`, `jpeg`, `gif`, `webp`.
 - DevLog video extension allowlist: `mp4`, `webm`, `mov`.
+- 25MB default upload limit at Flask and nginx levels.
 - Random hex filename prefix.
 - `secure_filename()` for original filename portion.
 - Pillow image verification.
 - Resize and optimization.
+- Server-derived MIME metadata after validation; client-supplied MIME is not trusted for uploaded images or message attachments.
+- Optional virus scan hook through `VIRUS_SCAN_ENABLED` and `VIRUS_SCAN_COMMAND`.
+- Supabase-first object storage with local disk as temporary/cache storage.
+- Private message attachments are fetched through authenticated Flask routes, not public `/uploads` URLs.
 - Failed upload cleanup.
-- Upload route only serves allowed folders.
+- Public upload route only serves allowed non-message folders.
 
 ### HTML And Markdown Safety
 
@@ -87,6 +94,18 @@ Allowed HTML is limited to selected formatting, code, table, image, link, span, 
 Jinja autoescaping protects templates by default.
 
 ### Security Headers
+
+Every response gets the core browser hardening headers:
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: SAMEORIGIN`
+- `X-Permitted-Cross-Domain-Policies: none`
+- `X-Download-Options: noopen`
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+
+The CSP allows current first-party scripts/styles, Google Fonts, the local Socket.IO endpoint, the existing Markdown editor CDN, and the notification audio asset. It explicitly blocks plugins with `object-src 'none'`, restricts forms with `form-action 'self'`, and does not allow `unsafe-eval`.
 
 Configured headers:
 
@@ -100,7 +119,7 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 Cache behavior:
 
 - Static files are public cached for 7 days.
-- Uploaded files are public cached for 1 day.
+- Public uploaded files are public cached for 1 day when served through Flask fallback.
 - API responses are `no-store`.
 - Authenticated GET pages are `no-store`.
 - Public anonymous GET pages are public cached for 120 seconds.
@@ -112,19 +131,46 @@ Before deploying:
 - Set `APP_ENV=production`.
 - Set a long random `SECRET_KEY`.
 - Use PostgreSQL through `DATABASE_URL`.
+- Set Redis-backed `RATELIMIT_STORAGE_URI`.
+- Set Supabase `SUPABASE_URL`, `SUPABASE_KEY`, `UPLOAD_STORAGE_BUCKET`, and `PRIVATE_UPLOAD_STORAGE_BUCKET`.
 - Configure SMTP credentials.
 - Set `MAIL_DEFAULT_SENDER`.
-- Use persistent upload storage.
 - Run `flask db upgrade`.
 - Run tests.
 - Serve behind HTTPS.
 - Use secure cookies, which `ProductionConfig` enables.
 - Configure reverse proxy headers if needed.
+- Use `/readyz` as the platform health check when supported.
 - Rotate default seed passwords.
 - Disable or protect demo accounts.
 - Set up backups for database and uploads.
 - Set up log collection and monitoring.
-- Use a shared rate-limit backend if running more than one worker.
+- Set `METRICS_TOKEN` or restrict `/metrics` at the proxy/network layer.
+- Verify the reverse proxy also enforces a 25MB upload limit.
+
+Run the production configuration gate:
+
+```powershell
+$env:APP_ENV='production'
+.\venv\Scripts\flask.exe --app app:create_app production-check
+.\venv\Scripts\flask.exe --app app:create_app smoke-check --base-url https://your-domain.example --iterations 3
+.\venv\Scripts\flask.exe --app app:create_app load-check --base-url https://your-domain.example --requests-per-target 25 --concurrency 5 --max-p95-ms 1500
+```
+
+The command fails on deployment blockers such as SQLite, weak `SECRET_KEY`, memory-backed rate limits, missing Supabase credentials, missing storage bucket names, upload limits above 25MB, non-SMTP email configuration, missing SMTP credentials, disabled CSRF, insecure cookies, or a non-HTTPS `PUBLIC_BASE_URL`.
+
+### Redis Caching
+
+Redis is used for shared rate limits, Socket.IO fanout, background queues, and short anonymous public-page caching. Set both values in production:
+
+```text
+REDIS_URL=redis://...
+RATELIMIT_STORAGE_URI=redis://...
+PUBLIC_PAGE_CACHE_ENABLED=true
+PUBLIC_PAGE_CACHE_SECONDS=120
+```
+
+The public-page cache only applies to anonymous `GET` requests without cookies, currently for `/blogs` and `/projects`. Authenticated users bypass it, so private/session state is not cached.
 
 ## Deployment Example
 
@@ -134,7 +180,8 @@ PowerShell setup:
 $env:APP_ENV='production'
 $env:FLASK_APP='run.py'
 .\venv\Scripts\flask.exe db upgrade
-.\venv\Scripts\python.exe -m pytest -q
+.\venv\Scripts\python.exe -m pytest -q -W error::sqlalchemy.exc.LegacyAPIWarning
+.\venv\Scripts\flask.exe --app app:create_app production-check
 ```
 
 Gunicorn command:
@@ -145,18 +192,27 @@ Gunicorn command:
 
 On Windows, Gunicorn is not the normal production choice. Use a Linux host/container for Gunicorn, or choose a Windows-compatible WSGI server if deploying directly on Windows.
 
+The Docker entrypoint runs:
+
+```text
+flask --app app:create_app production-check
+flask --app app:create_app deploy-db
+```
+
+Set `SKIP_PRODUCTION_CHECK=true` only for controlled diagnostics where startup must continue despite known config failures.
+
 ## Database Operations
 
 ### Local Development
 
-`run.py` does:
+`run.py` in development does:
 
 1. Create the app.
-2. Run `db.create_all()`.
+2. Run `db.create_all()` only outside production.
 3. Seed demo data if the SQLite database file is new.
 4. Start Flask dev server.
 
-This is convenient for local use but should not replace migrations in production.
+This is convenient for local use but does not replace migrations in production.
 
 ### Production
 
@@ -170,9 +226,18 @@ $env:FLASK_APP='run.py'
 Backups:
 
 - Back up the main database.
-- Back up uploaded media.
+- Back up uploaded media metadata and Supabase buckets.
 - Back up `.env` separately and securely.
 - Test restore regularly.
+
+App-created backup archives include `backup_manifest.json` with SHA-256 checksums. Verify archives before trusting them:
+
+```powershell
+.\venv\Scripts\flask.exe --app app:create_app backup-verify --path .\uploads\backups\haradi_backup_YYYYMMDD_HHMMSS.zip
+.\venv\Scripts\flask.exe --app app:create_app backup-drill --skip-database --json
+```
+
+See [Backup And Restore Runbook](BACKUP_RESTORE_RUNBOOK.md) for the restore drill and recovery targets.
 
 ## Logging
 
@@ -191,6 +256,37 @@ backupCount=3
 ```
 
 Use centralized logging in production. Local log files are ignored by git.
+
+Each response includes `X-Request-ID`. If a client sends a valid `X-Request-ID` or `X-Correlation-ID`, the app echoes it; otherwise it generates one. HTTP request logs are JSON-shaped and include method, path, endpoint, status, duration, user id when available, and request id.
+
+## Health And Metrics
+
+Probe endpoints:
+
+```text
+GET /healthz
+GET /readyz
+GET /metrics
+GET /api/v1/health
+```
+
+Use `/healthz` as a cheap liveness probe. Use `/readyz` as the deployment readiness probe; in production it includes production configuration failures in addition to the database check. Successful database readiness checks are cached in-process for `READINESS_CACHE_SECONDS` seconds and guarded by a per-worker lock, so frequent platform health checks do not stampede the database. `/metrics` emits Prometheus-style process/request counters and duration sums. Set `METRICS_TOKEN` in production or protect `/metrics` at the reverse proxy/network layer.
+
+Run route smoke checks before and after deploy:
+
+```powershell
+.\venv\Scripts\flask.exe --app app:create_app smoke-check --max-p95-ms 10000
+.\venv\Scripts\flask.exe --app app:create_app smoke-check --base-url https://your-domain.example --iterations 3
+```
+
+Run a small concurrent load regression check before release and against the deployed URL:
+
+```powershell
+.\venv\Scripts\flask.exe --app app:create_app load-check --requests-per-target 2 --concurrency 2 --max-p95-ms 10000
+.\venv\Scripts\flask.exe --app app:create_app load-check --base-url https://your-domain.example --requests-per-target 25 --concurrency 5 --max-p95-ms 1500
+```
+
+This is a regression gate, not a full capacity test. Real production load testing still needs production PostgreSQL, Redis, object storage, and representative data.
 
 ## Email Operations
 
@@ -218,13 +314,15 @@ Local upload path defaults to:
 uploads/
 ```
 
-Production recommendations:
+Production requirements:
 
-- Use persistent disk or object storage.
-- Store only filenames or object keys in the database.
-- Put upload serving behind a CDN if traffic grows.
-- Set size limits at the reverse proxy and Flask level.
-- Scan uploads if threat model requires it.
+- Use Supabase Storage or equivalent object storage; local disk is temporary/cache only.
+- Store file metadata/object keys in the database.
+- Use the public bucket for public avatars, banners, blogs, projects, and devlogs.
+- Use the private bucket for message attachments.
+- Put public upload serving behind a CDN when traffic grows.
+- Keep the reverse proxy and Flask upload limit aligned at 25MB.
+- Enable the virus scan hook when the hosting plan can run a scanner.
 
 ## Admin Operations
 
@@ -238,14 +336,15 @@ Admin capabilities:
 
 - View users and counts.
 - Suspend/restore non-admin users.
+- Review audit logs, login events, and monitoring data.
 - Update report status.
 - Publish/unpublish draft blogs and projects.
 
 Limitations:
 
-- No audit log for admin actions yet.
 - Admin suspension cannot suspend admin accounts from the panel.
 - Report workflow is status-only.
+- Admin action coverage should continue expanding as moderation tools grow.
 
 ## JWT Operations
 
@@ -253,6 +352,7 @@ JWTs:
 
 - Are signed with `SECRET_KEY`.
 - Expire after `JWT_EXPIRATION_HOURS`.
+- Include issuer, audience, issued-at, expiry, and token id claims.
 - Are checked manually in `/api/user` and `/api/me/xp`.
 
 Operational limitations:
@@ -265,18 +365,15 @@ Operational limitations:
 
 High value improvements:
 
-- Add Redis-backed rate limiting.
-- Add API rate limits, especially `/api/login`.
 - Add pagination parameters to public API lists.
-- Add an admin audit log.
-- Add content moderation records for actions taken.
+- Expand admin audit coverage for every moderation action.
+- Add more detailed content moderation records for actions taken.
 - Add account deletion and data export workflow beyond the current JSON export.
-- Move uploads to object storage.
-- Add server-side message pagination.
-- Add SocketIO or server-sent events for realtime messaging/notifications.
+- Add async media processing for thumbnails, transcoding, streaming, and CDN optimization.
+- Add push notifications on top of the current Socket.IO/polling messaging foundation.
 - Add Content-Security-Policy after reviewing inline scripts.
 - Add token revocation or short-lived access tokens plus refresh tokens for API auth.
-- Add tests for blocked-user behavior and message permissions.
+- Add browser E2E tests for blocked-user behavior, message permissions, private attachments, uploads, and SEO pages.
 
 ## Incident Response Basics
 

@@ -1,7 +1,5 @@
 <div class="devlog-comment" data-comment-id="{{ comment.id }}">
-    <a class="devlog-comment-avatar" href="{{ url_for('main.public_profile', username=comment.author.username) }}">
-        {{ comment.author.username[0] | upper }}
-    </a>
+    {{ user_avatar(comment.author, 'devlog-comment-avatar', href=url_for('main.public_profile', username=comment.author.username)) }}
     <div style="flex:1;min-width:0;">
         <div class="devlog-comment-meta">
             <a href="{{ url_for('main.public_profile', username=comment.author.username) }}">@{{ comment.author.username }}</a>

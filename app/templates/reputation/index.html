@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Reputation — AuthFlow{% endblock %}
-{% block meta_desc %}Track AuthFlow reputation, trust levels, badges, contribution signals, and community progress for developer profiles.{% endblock %}
+{% block title %}Reputation — HaradiBots{% endblock %}
+{% block meta_desc %}Track HaradiBots reputation, trust levels, badges, contribution signals, and community progress for developer profiles.{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">{% endblock %}
 
 {% block content %}
@@ -79,7 +79,7 @@
                     {% for user in top_users %}
                     <a href="/{{ user.username }}" style="display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-lg);text-decoration:none;transition:background var(--dur-fast);" onmouseover="this.style.background='rgba(255,255,255,.03)'" onmouseout="this.style.background='transparent'">
                         <span style="width:28px;font-family:var(--font-display);font-size:var(--text-md);font-weight:700;color:{% if loop.index <= 3 %}var(--warning){% else %}var(--text-faint){% endif %};">{{ loop.index }}</span>
-                        <div class="avatar-v2 avatar-v2--sm {% if loop.index <= 3 %}avatar-v2--ring{% endif %}">{{ user.username[0]|upper }}</div>
+                        {{ user_avatar(user, 'avatar-v2 avatar-v2--sm ' ~ ('avatar-v2--ring' if loop.index <= 3 else '')) }}
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:var(--text-sm);font-weight:500;color:var(--text-primary);">{{ user.full_name or user.username }}</div>
                             <div style="font-size:var(--text-xs);color:var(--text-muted);">@{{ user.username }}</div>

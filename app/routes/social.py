@@ -3,7 +3,7 @@
 from flask import Blueprint, render_template, flash, redirect, url_for, request
 from flask_login import current_user, login_required
 from app.extensions import db
-from app.models import User, Follow, Notification, Message
+from app.models import User, Follow, Notification, Message, ConversationMember
 from app.services.notifications import create_notification, mark_notifications_seen, serialize_notification
 from app.services.gamification import award_xp
 from app.utils.rate_limit import rate_limit
@@ -43,9 +43,31 @@ def get_notifications_count():
 def get_activity_pulse():
     """Returns lightweight unread counts for live badges."""
     latest = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).limit(5).all()
+    notification_count = db.session.query(db.func.count(Notification.id)).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read.is_(False),
+    ).scalar_subquery()
+    conversation_message_count = db.session.query(db.func.count(Message.id)).join(
+        ConversationMember,
+        Message.conversation_id == ConversationMember.conversation_id,
+    ).filter(
+        ConversationMember.user_id == current_user.id,
+        ConversationMember.is_active.is_(True),
+        Message.sender_id != current_user.id,
+        db.or_(
+            ConversationMember.last_read_message_id.is_(None),
+            Message.id > ConversationMember.last_read_message_id,
+        ),
+    ).scalar_subquery()
+    legacy_message_count = db.session.query(db.func.count(Message.id)).filter(
+        Message.conversation_id.is_(None),
+        Message.recipient_id == current_user.id,
+        Message.is_read.is_(False),
+    ).scalar_subquery()
+    notifications_count, messages_count = db.session.query(notification_count, conversation_message_count + legacy_message_count).one()
     return {
-        'notifications': db.session.query(db.func.count(Notification.id)).filter_by(user_id=current_user.id, is_read=False).scalar(),
-        'messages': db.session.query(db.func.count(Message.id)).filter_by(recipient_id=current_user.id, is_read=False).scalar(),
+        'notifications': notifications_count,
+        'messages': messages_count,
         'latest_notifications': [serialize_notification(notification) for notification in latest],
     }
 
@@ -82,14 +104,20 @@ def mark_notifications_read():
 def followers(username):
     user = User.query.filter_by(username=username).first_or_404()
     followers_list = Follow.query.filter_by(followed_id=user.id).all()
-    follower_users = [User.query.get(f.follower_id) for f in followers_list]
+    follower_ids = [follow.follower_id for follow in followers_list]
+    users = User.query.filter(User.id.in_(follower_ids)).all() if follower_ids else []
+    users_by_id = {follower.id: follower for follower in users}
+    follower_users = [users_by_id[user_id] for user_id in follower_ids if user_id in users_by_id]
     return render_template('social/followers.html', user=user, followers=follower_users)
 
 @social_bp.route('/<username>/following')
 def following(username):
     user = User.query.filter_by(username=username).first_or_404()
     following_list = Follow.query.filter_by(follower_id=user.id).all()
-    following_users = [User.query.get(f.followed_id) for f in following_list]
+    following_ids = [follow.followed_id for follow in following_list]
+    users = User.query.filter(User.id.in_(following_ids)).all() if following_ids else []
+    users_by_id = {followed.id: followed for followed in users}
+    following_users = [users_by_id[user_id] for user_id in following_ids if user_id in users_by_id]
     return render_template('social/following.html', user=user, following=following_users)
 
 @social_bp.route('/follow/<username>', methods=['POST'])

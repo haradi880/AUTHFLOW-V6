@@ -38,9 +38,10 @@ window.toast = toast;
 // LOCAL TIME FORMATTING
 // =====================================================
 
-window.AuthFlow = window.AuthFlow || {};
+window.HaradiBots = window.HaradiBots || {};
+window.AuthFlow = window.HaradiBots;
 
-window.AuthFlow.formatLocalTime = function formatLocalTime(value, format = 'datetime') {
+window.HaradiBots.formatLocalTime = function formatLocalTime(value, format = 'datetime') {
     if (!value) return '';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
@@ -68,9 +69,9 @@ window.AuthFlow.formatLocalTime = function formatLocalTime(value, format = 'date
     });
 };
 
-window.AuthFlow.formatLocalTimes = function formatLocalTimes(root = document) {
+window.HaradiBots.formatLocalTimes = function formatLocalTimes(root = document) {
     root.querySelectorAll('.js-local-time[datetime]').forEach(element => {
-        const formatted = window.AuthFlow.formatLocalTime(element.getAttribute('datetime'), element.dataset.format || 'datetime');
+        const formatted = window.HaradiBots.formatLocalTime(element.getAttribute('datetime'), element.dataset.format || 'datetime');
         if (formatted) element.textContent = formatted;
     });
 };
@@ -243,7 +244,7 @@ class ButtonLoader {
 // =====================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    window.AuthFlow.formatLocalTimes();
+    window.HaradiBots.formatLocalTimes();
 
     // Initialize password toggles
     document.querySelectorAll('.password-toggle').forEach(button => {

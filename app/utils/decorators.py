@@ -4,8 +4,10 @@ They add extra functionality like requiring login or admin status.
 """
 
 from functools import wraps
-from flask import redirect, url_for, flash, session, request
+from flask import abort, redirect, url_for, flash, session, request
 from flask_login import current_user
+
+from app.extensions import db
 
 
 def login_required(f):
@@ -53,12 +55,12 @@ def owner_required(model_class):
                 return "Resource not found", 404
             
             # Find the resource
-            resource = model_class.query.get_or_404(resource_id)
+            resource = db.get_or_404(model_class, resource_id)
             
             # Check ownership
-            if resource.user_id != current_user.id:
+            if resource.user_id != current_user.id and not getattr(current_user, "is_admin", False):
                 flash('You can only edit your own content.', 'error')
-                return redirect(url_for('main.home'))
+                abort(403)
             
             return f(*args, **kwargs)
         return decorated_function

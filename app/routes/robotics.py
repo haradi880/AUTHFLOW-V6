@@ -10,6 +10,8 @@ from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.models import RoboticsFile, RoboticsProject, Tag
 from app.services.content import generate_slug, sync_tags
+from app.utils.rate_limit import rate_limit
+from app.utils.uploads import _remove_local_after_cloud_upload, public_upload_url, scan_file_for_virus, upload_to_supabase
 from app.utils.uploads_secure import delete_file_secure, save_upload_secure
 
 robotics_bp = Blueprint("robotics", __name__)
@@ -50,13 +52,36 @@ def _save_robotics_file(file):
     if ext not in ALLOWED_ROBOTICS_FILE_EXTENSIONS:
         return None, "Unsupported file type."
 
-    upload_folder = Path(current_app.config["UPLOAD_FOLDER"]) / "projects"
+    max_bytes = int(current_app.config.get("MAX_UPLOAD_BYTES", 25 * 1024 * 1024))
+    size = getattr(file, "content_length", None)
+    stream = getattr(file, "stream", None)
+    if not size and stream and hasattr(stream, "tell") and hasattr(stream, "seek"):
+        try:
+            current = stream.tell()
+            stream.seek(0, 2)
+            size = stream.tell()
+            stream.seek(current)
+        except Exception:
+            size = None
+    if size is not None and size > max_bytes:
+        return None, f"File is too large. Maximum size is {max_bytes // (1024 * 1024)} MB."
+
+    upload_root = Path(current_app.config["UPLOAD_FOLDER"]).resolve()
+    upload_folder = (upload_root / "projects").resolve()
+    if upload_root not in upload_folder.parents and upload_folder != upload_root:
+        return None, "Invalid upload path."
     upload_folder.mkdir(parents=True, exist_ok=True)
     base_name = secure_filename(file.filename.rsplit(".", 1)[0]) or "robotics-file"
     filename = f"{secrets.token_hex(8)}_{base_name}.{ext}"
     path = upload_folder / filename
+    uploaded = False
     try:
         file.save(path)
+        scan_file_for_virus(path)
+        uploaded = upload_to_supabase(path, "projects", filename, getattr(file, "mimetype", None))
+        if not uploaded and not current_app.config.get("TESTING") and current_app.config.get("APP_ENV") == "production":
+            raise RuntimeError("Supabase upload storage is not configured.")
+        _remove_local_after_cloud_upload(path, uploaded)
         return filename, None
     except Exception as exc:
         current_app.logger.warning("Robotics file upload failed: %s", exc)
@@ -113,6 +138,7 @@ def project_detail(slug):
 @robotics_bp.route("/robotics/upload", methods=["GET", "POST"])
 @robotics_bp.route("/upload/robotics", methods=["GET", "POST"])
 @login_required
+@rate_limit(max_calls=10, window_seconds=600, scope="robotics-upload")
 def upload_project():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
@@ -176,25 +202,33 @@ def upload_project():
 
 @robotics_bp.get("/robotics/files/<int:file_id>/download")
 def download_file(file_id):
-    file = RoboticsFile.query.get_or_404(file_id)
+    file = db.get_or_404(RoboticsFile, file_id)
     can_view_draft = current_user.is_authenticated and (file.project.user_id == current_user.id or current_user.is_admin)
     if file.project.status != "published" and not can_view_draft:
         flash("This file is not available.", "error")
         return redirect(url_for("robotics.index"))
     file.download_count = (file.download_count or 0) + 1
     db.session.commit()
-    return send_from_directory(
-        Path(current_app.config["UPLOAD_FOLDER"]) / "projects",
-        file.filename,
-        as_attachment=True,
-        download_name=file.original_name or file.filename,
-    )
+    upload_root = Path(current_app.config["UPLOAD_FOLDER"]).resolve()
+    local_path = (upload_root / "projects" / file.filename).resolve()
+    if upload_root in local_path.parents and local_path.exists() and local_path.is_file():
+        return send_from_directory(
+            upload_root / "projects",
+            file.filename,
+            as_attachment=True,
+            download_name=file.original_name or file.filename,
+        )
+    cloud_url = public_upload_url("projects", file.filename)
+    if cloud_url:
+        return redirect(cloud_url)
+    flash("This file is not available.", "error")
+    return redirect(url_for("robotics.project_detail", slug=file.project.slug))
 
 
 @robotics_bp.post("/robotics/<int:project_id>/delete")
 @login_required
 def delete_project(project_id):
-    project = RoboticsProject.query.get_or_404(project_id)
+    project = db.get_or_404(RoboticsProject, project_id)
     if project.user_id != current_user.id and not current_user.is_admin:
         flash("You can only delete your own robotics projects.", "error")
         return redirect(url_for("robotics.project_detail", slug=project.slug))

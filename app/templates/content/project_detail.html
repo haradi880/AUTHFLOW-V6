@@ -1,7 +1,36 @@
 {% extends "base.html" %}
-{% block title %}{{ project.title }} - AuthFlow{% endblock %}
+{% block title %}{{ project.title }} - HaradiBots{% endblock %}
 {% block meta_desc %}{{ project.description|striptags|truncate(155, true, '') }}{% endblock %}
-{% block canonical_url %}{{ url_for('project.project_detail', slug=project.slug, _external=True) }}{% endblock %}
+{% block canonical_url %}{{ public_url_for('project.project_detail', slug=project.slug) }}{% endblock %}
+{% block og_image %}{% if project.thumbnail %}{{ public_url_for('uploaded_file', folder='projects', filename=project.thumbnail) }}{% endif %}{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    "name": {{ project.title|tojson }},
+    "description": {{ project.description|striptags|truncate(300, true, '')|tojson }},
+    "url": {{ public_url_for('project.project_detail', slug=project.slug)|tojson }},
+    "author": {
+        "@type": "Person",
+        "name": {{ (project.author.full_name or project.author.username)|tojson }},
+        "url": {{ public_url_for('main.public_profile', username=project.author.username)|tojson }}
+    },
+    "dateCreated": {{ project.created_at.isoformat()|tojson }},
+    "dateModified": {{ project.updated_at.isoformat()|tojson }},
+    "keywords": {{ project.tech_stack|tojson }}
+    {% if project.github_url %},
+    "codeRepository": {{ project.github_url|tojson }}
+    {% endif %}
+    {% if project.demo_url %},
+    "sameAs": {{ project.demo_url|tojson }}
+    {% endif %}
+    {% if project.thumbnail %},
+    "image": {{ public_url_for('uploaded_file', folder='projects', filename=project.thumbnail)|tojson }}
+    {% endif %}
+}
+</script>
+{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/feed.css') }}">

@@ -6,6 +6,7 @@ from werkzeug.exceptions import HTTPException
 
 from app.extensions import db
 from app.models import Blog, Job, Project, User
+from app.services.search import search_all
 from app.utils.rate_limit import rate_limit
 
 api_v1_bp = Blueprint("api_v1", __name__)
@@ -57,7 +58,7 @@ def health():
 
 
 @api_v1_bp.get("/jobs")
-@rate_limit(max_calls=120, window_seconds=60, scope="api-v1-jobs")
+@rate_limit(max_calls=120, window_seconds=60, scope="api-v1-jobs", methods={"GET"})
 def jobs():
     page, per_page = pagination_args()
     query_text = request.args.get("q", "").strip()
@@ -93,20 +94,19 @@ def jobs():
 
 
 @api_v1_bp.get("/search")
-@rate_limit(max_calls=120, window_seconds=60, scope="api-v1-search")
+@rate_limit(max_calls=120, window_seconds=60, scope="api-v1-search", methods={"GET"})
 def search():
     q = request.args.get("q", "").strip()
     if len(q) < 2:
-        return ok({"users": [], "blogs": [], "projects": []}, {"query": q})
-    pattern = f"%{q}%"
-    users = User.query.filter(User.active.is_(True), db.or_(User.username.ilike(pattern), User.full_name.ilike(pattern), User.headline.ilike(pattern))).limit(10).all()
-    blogs = Blog.query.filter(Blog.status == "published", db.or_(Blog.title.ilike(pattern), Blog.excerpt.ilike(pattern))).limit(10).all()
-    projects = Project.query.filter(Project.status == "published", db.or_(Project.title.ilike(pattern), Project.description.ilike(pattern))).limit(10).all()
+        return ok({"users": [], "blogs": [], "projects": [], "jobs": [], "tags": []}, {"query": q})
+    results = search_all(q, limit=10)
     return ok(
         {
-            "users": [{"username": user.username, "full_name": user.full_name, "headline": user.headline} for user in users],
-            "blogs": [{"title": blog.title, "slug": blog.slug, "excerpt": blog.excerpt} for blog in blogs],
-            "projects": [{"title": project.title, "slug": project.slug, "description": project.description[:180]} for project in projects],
+            "users": [{"username": user.username, "full_name": user.full_name, "headline": user.headline} for user in results["users"]],
+            "blogs": [{"title": blog.title, "slug": blog.slug, "excerpt": blog.excerpt} for blog in results["blogs"]],
+            "projects": [{"title": project.title, "slug": project.slug, "description": project.description[:180]} for project in results["projects"]],
+            "jobs": [{"title": job.title, "slug": job.slug, "company": job.company.name if job.company else None} for job in results["jobs"]],
+            "tags": [{"name": tag.name, "slug": tag.slug} for tag in results["tags"]],
         },
         {"query": q},
     )

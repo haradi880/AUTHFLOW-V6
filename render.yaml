@@ -1,18 +1,18 @@
 services:
   - type: web
-    name: authflow-web
+    name: haradibots-web
     env: docker
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /healthz
+    healthCheckPath: /readyz
     envVars:
       - key: APP_ENV
         value: production
       - key: APP_NAME
-        value: Haradi Bots
+        value: HaradiBots
       - key: PUBLIC_BASE_URL
         value: https://haradibots.onrender.com
       - key: MAIL_SENDER_NAME
-        value: Haradi Bots
+        value: HaradiBots
       - key: TASK_QUEUE_ASYNC
         value: "true"
       - key: WEB_CONCURRENCY
@@ -20,27 +20,39 @@ services:
       - key: GUNICORN_THREADS
         value: "4"
       - key: EMAIL_BACKEND
-        value: auto
+        value: smtp
       - key: EMAIL_DELIVERY_ORDER
-        value: resend,sendgrid,smtp,file
+        value: smtp
       - key: EMAIL_FILE_FALLBACK
+        value: "false"
+      - key: MAIL_SERVER
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USE_TLS
         value: "true"
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_FROM
-        sync: false
-      - key: SENDGRID_API_KEY
-        sync: false
-      - key: SENDGRID_FROM
-        sync: false
+      - key: MAIL_USE_SSL
+        value: "false"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
         sync: false
       - key: UPLOAD_STORAGE_BUCKET
         value: uploads
+      - key: PRIVATE_UPLOAD_STORAGE_BUCKET
+        value: private-uploads
       - key: BACKUP_STORAGE_BUCKET
         value: backups
+      - key: UPLOAD_KEEP_LOCAL
+        value: "false"
+      - key: MAX_CONTENT_LENGTH
+        value: "26214400"
+      - key: MAX_UPLOAD_BYTES
+        value: "26214400"
+      - key: MESSAGE_ATTACHMENT_MAX_BYTES
+        value: "26214400"
+      - key: METRICS_TOKEN
+        sync: false
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
@@ -53,21 +65,21 @@ services:
         sync: false
       - key: DATABASE_URL
         fromDatabase:
-          name: authflow-postgres
+          name: haradibots-postgres
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: authflow-redis
+          name: haradibots-redis
           property: connectionString
       - key: RATELIMIT_STORAGE_URI
         fromService:
           type: redis
-          name: authflow-redis
+          name: haradibots-redis
           property: connectionString
 
   - type: worker
-    name: authflow-worker
+    name: haradibots-worker
     env: docker
     dockerfilePath: ./Dockerfile
     dockerCommand: rq worker -u $REDIS_URL default notifications maintenance
@@ -75,37 +87,49 @@ services:
       - key: APP_ENV
         value: production
       - key: APP_NAME
-        value: Haradi Bots
+        value: HaradiBots
       - key: PUBLIC_BASE_URL
         value: https://haradibots.onrender.com
       - key: MAIL_SENDER_NAME
-        value: Haradi Bots
+        value: HaradiBots
       - key: TASK_QUEUE_ASYNC
         value: "true"
       - key: SKIP_DB_MIGRATIONS
         value: "true"
       - key: EMAIL_BACKEND
-        value: auto
+        value: smtp
       - key: EMAIL_DELIVERY_ORDER
-        value: resend,sendgrid,smtp,file
+        value: smtp
       - key: EMAIL_FILE_FALLBACK
+        value: "false"
+      - key: MAIL_SERVER
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USE_TLS
         value: "true"
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_FROM
-        sync: false
-      - key: SENDGRID_API_KEY
-        sync: false
-      - key: SENDGRID_FROM
-        sync: false
+      - key: MAIL_USE_SSL
+        value: "false"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
         sync: false
       - key: UPLOAD_STORAGE_BUCKET
         value: uploads
+      - key: PRIVATE_UPLOAD_STORAGE_BUCKET
+        value: private-uploads
       - key: BACKUP_STORAGE_BUCKET
         value: backups
+      - key: UPLOAD_KEEP_LOCAL
+        value: "false"
+      - key: MAX_CONTENT_LENGTH
+        value: "26214400"
+      - key: MAX_UPLOAD_BYTES
+        value: "26214400"
+      - key: MESSAGE_ATTACHMENT_MAX_BYTES
+        value: "26214400"
+      - key: METRICS_TOKEN
+        sync: false
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
@@ -118,19 +142,24 @@ services:
         sync: false
       - key: DATABASE_URL
         fromDatabase:
-          name: authflow-postgres
+          name: haradibots-postgres
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: authflow-redis
+          name: haradibots-redis
+          property: connectionString
+      - key: RATELIMIT_STORAGE_URI
+        fromService:
+          type: redis
+          name: haradibots-redis
           property: connectionString
 
   - type: redis
-    name: authflow-redis
+    name: haradibots-redis
     plan: free
     ipAllowList: []
 
 databases:
-  - name: authflow-postgres
+  - name: haradibots-postgres
     plan: free

@@ -1,7 +1,7 @@
 <article class="devlog-card" data-devlog-id="{{ devlog.id }}">
     <header class="devlog-card-header">
         <a class="devlog-author" href="{{ url_for('main.public_profile', username=devlog.author.username) }}">
-            <span class="devlog-avatar">{{ devlog.author.username[0] | upper }}</span>
+            {{ user_avatar(devlog.author, 'devlog-avatar') }}
             <span>
                 <strong>{{ devlog.author.full_name or devlog.author.username }}</strong>
                 <small>@{{ devlog.author.username }} · <time class="js-local-time" datetime="{{ devlog.created_at.isoformat() }}Z" data-format="short-date">{{ devlog.created_at.strftime('%b %d') }}</time></small>
