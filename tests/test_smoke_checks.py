@@ -56,3 +56,12 @@ def test_smoke_check_cli_outputs_json():
     assert result.exit_code == 0
     assert '"failures": 0' in result.output
     assert '"/readyz"' in result.output
+
+
+def test_smoke_check_cli_prepares_empty_testing_schema():
+    app = create_app("testing")
+
+    result = app.test_cli_runner().invoke(args=["smoke-check", "--json", "--max-p95-ms", "10000"])
+    assert result.exit_code == 0
+    assert '"failures": 0' in result.output
+    assert '"/blogs"' in result.output

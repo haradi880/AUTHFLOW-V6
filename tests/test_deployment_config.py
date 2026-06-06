@@ -39,7 +39,11 @@ def test_render_web_uses_readiness_and_required_env_vars():
 def test_render_worker_gets_redis_and_rate_limit_env_vars():
     worker = next(service for service in render_services() if service["type"] == "worker")
     env = env_map(worker)
+    keyvalue = next(service for service in render_services() if service["name"] == "haradibots-redis")
+    assert keyvalue["type"] == "keyvalue"
+    assert env["REDIS_URL"]["fromService"]["type"] == "keyvalue"
     assert env["REDIS_URL"]["fromService"]["name"] == "haradibots-redis"
+    assert env["RATELIMIT_STORAGE_URI"]["fromService"]["type"] == "keyvalue"
     assert env["RATELIMIT_STORAGE_URI"]["fromService"]["name"] == "haradibots-redis"
     assert env["UPLOAD_KEEP_LOCAL"]["value"] == "false"
 

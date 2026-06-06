@@ -81,3 +81,23 @@ def test_load_check_cli_outputs_json():
     assert '"failures": 0' in result.output
     assert '"total_requests": 6' in result.output
     assert '"/healthz"' in result.output
+
+
+def test_load_check_cli_prepares_empty_testing_schema():
+    app = create_app("testing")
+
+    result = app.test_cli_runner().invoke(
+        args=[
+            "load-check",
+            "--json",
+            "--requests-per-target",
+            "1",
+            "--concurrency",
+            "1",
+            "--max-p95-ms",
+            "10000",
+        ]
+    )
+    assert result.exit_code == 0
+    assert '"failures": 0' in result.output
+    assert '"/projects"' in result.output

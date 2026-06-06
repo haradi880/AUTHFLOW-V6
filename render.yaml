@@ -69,12 +69,12 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: haradibots-redis
           property: connectionString
       - key: RATELIMIT_STORAGE_URI
         fromService:
-          type: redis
+          type: keyvalue
           name: haradibots-redis
           property: connectionString
 
@@ -146,16 +146,16 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: haradibots-redis
           property: connectionString
       - key: RATELIMIT_STORAGE_URI
         fromService:
-          type: redis
+          type: keyvalue
           name: haradibots-redis
           property: connectionString
 
-  - type: redis
+  - type: keyvalue
     name: haradibots-redis
     plan: free
     ipAllowList: []

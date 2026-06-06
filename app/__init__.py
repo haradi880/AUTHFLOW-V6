@@ -442,6 +442,11 @@ def register_well_known_routes(app):
 
 
 def register_cli(app):
+    def prepare_internal_test_schema():
+        if app.config.get("TESTING"):
+            with app.app_context():
+                db.create_all()
+
     def seed_initial_data():
         from app.models import Category, User
 
@@ -629,6 +634,8 @@ def register_cli(app):
         """Run lightweight route smoke and latency checks."""
         from app.services.smoke import run_smoke_targets, smoke_summary
 
+        if not base_url:
+            prepare_internal_test_schema()
         results = run_smoke_targets(
             app=None if base_url else app,
             base_url=base_url,
@@ -682,6 +689,8 @@ def register_cli(app):
         from app.services.smoke import DEFAULT_SMOKE_TARGETS
         from app.services.load import load_summary, run_load_targets
 
+        if not base_url:
+            prepare_internal_test_schema()
         targets = None
         if target_paths:
             by_path = {target["path"]: target for target in DEFAULT_SMOKE_TARGETS}
