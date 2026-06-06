@@ -89,6 +89,10 @@ class Config:
     EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", False)
     EMAIL_OUTBOX_FOLDER = os.getenv("EMAIL_OUTBOX_FOLDER") or str(BASE_DIR / "logs" / "email_outbox")
     EMAIL_ASYNC = _env_bool("EMAIL_ASYNC", True)
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    RESEND_FROM = os.getenv("RESEND_FROM")
+    SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+    SENDGRID_FROM = os.getenv("SENDGRID_FROM")
 
     MAX_LOGIN_ATTEMPTS = _env_int("MAX_LOGIN_ATTEMPTS", 5)
     LOGIN_LOCK_MINUTES = _env_int("LOGIN_LOCK_MINUTES", 15)
@@ -149,8 +153,6 @@ class ProductionConfig(Config):
     DEBUG = False
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True
-    EMAIL_BACKEND = "smtp"
-    EMAIL_DELIVERY_ORDER = "smtp"
     EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", False)
     MAIL_FORCE_IPV4 = _env_bool("MAIL_FORCE_IPV4", True)
 

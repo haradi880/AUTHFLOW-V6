@@ -20,11 +20,15 @@ services:
       - key: GUNICORN_THREADS
         value: "4"
       - key: EMAIL_BACKEND
-        value: smtp
+        value: resend
       - key: EMAIL_DELIVERY_ORDER
-        value: smtp
+        value: resend
       - key: EMAIL_FILE_FALLBACK
         value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
       - key: MAIL_SERVER
         sync: false
       - key: MAIL_PORT
@@ -99,11 +103,15 @@ services:
       - key: SKIP_DB_MIGRATIONS
         value: "true"
       - key: EMAIL_BACKEND
-        value: smtp
+        value: resend
       - key: EMAIL_DELIVERY_ORDER
-        value: smtp
+        value: resend
       - key: EMAIL_FILE_FALLBACK
         value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
       - key: MAIL_SERVER
         sync: false
       - key: MAIL_PORT

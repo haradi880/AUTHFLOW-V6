@@ -42,6 +42,23 @@ def test_production_checks_pass_for_hardened_config():
     assert summary == {"total": len(checks), "failures": 0, "warnings": 0}
 
 
+def test_production_checks_pass_for_resend_config():
+    checks = run_production_checks(
+        production_config(
+            EMAIL_BACKEND="resend",
+            EMAIL_DELIVERY_ORDER="resend",
+            RESEND_API_KEY="re_test_key",
+            RESEND_FROM="HaradiBots <noreply@example.com>",
+            MAIL_SERVER="",
+            MAIL_PORT="",
+            MAIL_USERNAME="",
+            MAIL_PASSWORD="",
+        )
+    )
+    summary = production_check_summary(checks)
+    assert summary == {"total": len(checks), "failures": 0, "warnings": 0}
+
+
 def test_production_checks_fail_for_common_bad_deploy_config():
     checks = run_production_checks(
         production_config(
@@ -64,12 +81,14 @@ def test_production_checks_fail_for_common_bad_deploy_config():
     assert production_check_summary(checks)["failures"] >= 6
 
 
-def test_production_config_forces_smtp_only(monkeypatch):
+def test_production_config_keeps_selected_email_backend(monkeypatch):
     import importlib
 
     monkeypatch.setenv("APP_ENV", "production")
-    monkeypatch.setenv("EMAIL_BACKEND", "auto")
-    monkeypatch.setenv("EMAIL_DELIVERY_ORDER", "smtp,resend")
+    monkeypatch.setenv("EMAIL_BACKEND", "resend")
+    monkeypatch.setenv("EMAIL_DELIVERY_ORDER", "resend")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("RESEND_FROM", "HaradiBots <noreply@example.com>")
     monkeypatch.setenv("MAIL_FORCE_IPV4", "true")
 
     import config as app_config
@@ -77,6 +96,7 @@ def test_production_config_forces_smtp_only(monkeypatch):
     app_config = importlib.reload(app_config)
     ProductionConfig = app_config.ProductionConfig
 
-    assert ProductionConfig.EMAIL_BACKEND == "smtp"
-    assert ProductionConfig.EMAIL_DELIVERY_ORDER == "smtp"
+    assert ProductionConfig.EMAIL_BACKEND == "resend"
+    assert ProductionConfig.EMAIL_DELIVERY_ORDER == "resend"
+    assert ProductionConfig.RESEND_API_KEY == "re_test_key"
     assert ProductionConfig.MAIL_FORCE_IPV4 is True

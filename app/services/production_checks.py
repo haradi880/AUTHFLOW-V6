@@ -37,13 +37,43 @@ def _check(condition, key, message, detail="", failure_status="fail"):
     return ProductionCheck(key, "pass" if condition else failure_status, message, detail)
 
 
+def _configured_email_backends(config):
+    backend = (config.get("EMAIL_BACKEND") or "").lower()
+    raw_order = config.get("EMAIL_DELIVERY_ORDER") or ""
+    if backend and backend != "auto":
+        backends = [backend]
+    else:
+        backends = [item.strip().lower() for item in raw_order.split(",") if item.strip()]
+    return [item for item in backends if item in {"smtp", "resend", "sendgrid"}]
+
+
+def _smtp_configured(config):
+    return all(_present(config.get(key)) for key in ("MAIL_SERVER", "MAIL_PORT", "MAIL_USERNAME", "MAIL_PASSWORD", "MAIL_DEFAULT_SENDER"))
+
+
+def _resend_configured(config):
+    return _present(config.get("RESEND_API_KEY")) and _present(config.get("RESEND_FROM") or config.get("MAIL_DEFAULT_SENDER"))
+
+
+def _sendgrid_configured(config):
+    return _present(config.get("SENDGRID_API_KEY")) and _present(config.get("SENDGRID_FROM") or config.get("MAIL_DEFAULT_SENDER"))
+
+
+def _email_delivery_configured(config):
+    backends = _configured_email_backends(config)
+    return any(
+        (backend == "smtp" and _smtp_configured(config))
+        or (backend == "resend" and _resend_configured(config))
+        or (backend == "sendgrid" and _sendgrid_configured(config))
+        for backend in backends
+    )
+
+
 def run_production_checks(config):
     """Return production readiness checks for deployment-critical settings."""
     database_uri = config.get("SQLALCHEMY_DATABASE_URI") or ""
     ratelimit_uri = config.get("RATELIMIT_STORAGE_URI") or ""
     secret_key = config.get("SECRET_KEY") or ""
-    email_backend = (config.get("EMAIL_BACKEND") or "").lower()
-    delivery_order = [item.strip().lower() for item in (config.get("EMAIL_DELIVERY_ORDER") or "").split(",") if item.strip()]
 
     checks = [
         _check(
@@ -111,15 +141,15 @@ def run_production_checks(config):
             "Set MAX_CONTENT_LENGTH, MAX_UPLOAD_BYTES, and MESSAGE_ATTACHMENT_MAX_BYTES to 26214400 or lower.",
         ),
         _check(
-            email_backend == "smtp" and delivery_order == ["smtp"],
+            _email_delivery_configured(config),
             "email_backend",
-            "Email is SMTP-only.",
-            "Set EMAIL_BACKEND=smtp and EMAIL_DELIVERY_ORDER=smtp.",
+            "Transactional email delivery is configured.",
+            "Set EMAIL_BACKEND to smtp, resend, or sendgrid and provide the matching credentials.",
         ),
         _check(
-            all(_present(config.get(key)) for key in ("MAIL_SERVER", "MAIL_PORT", "MAIL_USERNAME", "MAIL_PASSWORD", "MAIL_DEFAULT_SENDER")),
+            "smtp" not in _configured_email_backends(config) or _smtp_configured(config),
             "smtp",
-            "SMTP credentials are configured.",
+            "SMTP credentials are configured when SMTP is enabled.",
             "Set MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, and MAIL_DEFAULT_SENDER.",
         ),
         _check(

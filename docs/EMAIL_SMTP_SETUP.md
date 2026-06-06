@@ -1,6 +1,22 @@
-# SMTP Email Setup
+# Email Setup
 
-HaradiBots supports SMTP, but the hosting provider must allow outbound SMTP traffic.
+HaradiBots supports SMTP and HTTPS email APIs. On Render, HTTPS APIs are usually more reliable than SMTP.
+
+## Recommended On Render: Resend
+
+SMTP can time out on Render even when the app is configured correctly. Resend uses HTTPS instead of SMTP ports.
+
+Set these Render environment variables:
+
+```env
+EMAIL_BACKEND=resend
+EMAIL_DELIVERY_ORDER=resend
+RESEND_API_KEY=re_your_key_here
+RESEND_FROM=HaradiBots <your-verified-sender@example.com>
+MAIL_DEFAULT_SENDER=your-verified-sender@example.com
+```
+
+`RESEND_FROM` must be a sender/domain verified in Resend.
 
 ## Important Render Limitation
 
