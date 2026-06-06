@@ -4,10 +4,10 @@ HaradiBots supports SMTP, but the hosting provider must allow outbound SMTP traf
 
 ## Important Render Limitation
 
-Render Free web services block outbound SMTP ports `25`, `465`, and `587`.
+Render Free web services commonly block outbound SMTP ports `25`, `465`, and `587`.
 Docker does not bypass this because the block is outside the container.
 
-To use SMTP on Render, upgrade the web service to a paid instance type or deploy on a host/VPS that allows outbound SMTP.
+To use SMTP on Render without upgrading, use an SMTP provider that documents support for port `2525`.
 
 ## Gmail SMTP
 
@@ -30,6 +30,7 @@ MAIL_SERVER=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USE_TLS=true
 MAIL_USE_SSL=false
+MAIL_FORCE_IPV4=true
 MAIL_USERNAME=your-address@gmail.com
 MAIL_PASSWORD=your-16-character-app-password
 MAIL_DEFAULT_SENDER=your-address@gmail.com
@@ -62,7 +63,17 @@ MAIL_USE_TLS=false
 MAIL_USE_SSL=true
 ```
 
-Some providers support port `2525`; use it only if your hosting provider allows it and your SMTP provider documents it.
+Render-friendly port `2525`:
+
+```env
+MAIL_SERVER=your-provider-smtp-host
+MAIL_PORT=2525
+MAIL_USE_TLS=true
+MAIL_USE_SSL=false
+MAIL_FORCE_IPV4=true
+```
+
+Use this only if your SMTP provider documents port `2525`. Gmail SMTP usually uses `587` with TLS or `465` with SSL, not `2525`.
 
 ## Production Recommendation
 

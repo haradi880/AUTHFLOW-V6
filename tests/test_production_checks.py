@@ -65,11 +65,18 @@ def test_production_checks_fail_for_common_bad_deploy_config():
 
 
 def test_production_config_forces_smtp_only(monkeypatch):
+    import importlib
+
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("EMAIL_BACKEND", "auto")
     monkeypatch.setenv("EMAIL_DELIVERY_ORDER", "smtp,resend")
+    monkeypatch.setenv("MAIL_FORCE_IPV4", "true")
 
-    from config import ProductionConfig
+    import config as app_config
+
+    app_config = importlib.reload(app_config)
+    ProductionConfig = app_config.ProductionConfig
 
     assert ProductionConfig.EMAIL_BACKEND == "smtp"
     assert ProductionConfig.EMAIL_DELIVERY_ORDER == "smtp"
+    assert ProductionConfig.MAIL_FORCE_IPV4 is True

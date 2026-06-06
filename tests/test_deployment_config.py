@@ -19,6 +19,8 @@ def test_render_web_uses_readiness_and_required_env_vars():
     env = env_map(web)
     assert web["healthCheckPath"] == "/readyz"
     assert env["METRICS_TOKEN"].get("generateValue") is True
+    assert env["MAIL_PORT"]["value"] == "2525"
+    assert env["MAIL_FORCE_IPV4"]["value"] == "true"
     for key in (
         "DATABASE_URL",
         "REDIS_URL",
@@ -43,6 +45,8 @@ def test_render_worker_gets_redis_and_rate_limit_env_vars():
     keyvalue = next(service for service in render_services() if service["name"] == "haradibots-redis")
     assert keyvalue["type"] == "keyvalue"
     assert env["METRICS_TOKEN"].get("generateValue") is True
+    assert env["MAIL_PORT"]["value"] == "2525"
+    assert env["MAIL_FORCE_IPV4"]["value"] == "true"
     assert env["REDIS_URL"]["fromService"]["type"] == "keyvalue"
     assert env["REDIS_URL"]["fromService"]["name"] == "haradibots-redis"
     assert env["RATELIMIT_STORAGE_URI"]["fromService"]["type"] == "keyvalue"

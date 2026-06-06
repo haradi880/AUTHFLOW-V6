@@ -152,6 +152,7 @@ class ProductionConfig(Config):
     EMAIL_BACKEND = "smtp"
     EMAIL_DELIVERY_ORDER = "smtp"
     EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", False)
+    MAIL_FORCE_IPV4 = _env_bool("MAIL_FORCE_IPV4", True)
 
 
 config_by_name = {

@@ -26,13 +26,15 @@ services:
       - key: EMAIL_FILE_FALLBACK
         value: "false"
       - key: MAIL_SERVER
-        value: smtp.gmail.com
+        sync: false
       - key: MAIL_PORT
-        value: "587"
+        value: "2525"
       - key: MAIL_USE_TLS
         value: "true"
       - key: MAIL_USE_SSL
         value: "false"
+      - key: MAIL_FORCE_IPV4
+        value: "true"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
@@ -103,13 +105,15 @@ services:
       - key: EMAIL_FILE_FALLBACK
         value: "false"
       - key: MAIL_SERVER
-        value: smtp.gmail.com
+        sync: false
       - key: MAIL_PORT
-        value: "587"
+        value: "2525"
       - key: MAIL_USE_TLS
         value: "true"
       - key: MAIL_USE_SSL
         value: "false"
+      - key: MAIL_FORCE_IPV4
+        value: "true"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
