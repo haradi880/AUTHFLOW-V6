@@ -62,3 +62,14 @@ def test_production_checks_fail_for_common_bad_deploy_config():
     assert statuses["email_backend"] == "fail"
     assert statuses["upload_limits"] == "fail"
     assert production_check_summary(checks)["failures"] >= 6
+
+
+def test_production_config_forces_smtp_only(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("EMAIL_BACKEND", "auto")
+    monkeypatch.setenv("EMAIL_DELIVERY_ORDER", "smtp,resend")
+
+    from config import ProductionConfig
+
+    assert ProductionConfig.EMAIL_BACKEND == "smtp"
+    assert ProductionConfig.EMAIL_DELIVERY_ORDER == "smtp"

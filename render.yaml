@@ -52,7 +52,7 @@ services:
       - key: MESSAGE_ATTACHMENT_MAX_BYTES
         value: "26214400"
       - key: METRICS_TOKEN
-        sync: false
+        generateValue: true
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
@@ -129,7 +129,7 @@ services:
       - key: MESSAGE_ATTACHMENT_MAX_BYTES
         value: "26214400"
       - key: METRICS_TOKEN
-        sync: false
+        generateValue: true
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD

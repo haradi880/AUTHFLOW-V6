@@ -149,6 +149,8 @@ class ProductionConfig(Config):
     DEBUG = False
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True
+    EMAIL_BACKEND = "smtp"
+    EMAIL_DELIVERY_ORDER = "smtp"
     EMAIL_FILE_FALLBACK = _env_bool("EMAIL_FILE_FALLBACK", False)
 
 

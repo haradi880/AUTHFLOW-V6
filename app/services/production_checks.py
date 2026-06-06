@@ -69,13 +69,13 @@ def run_production_checks(config):
             ratelimit_uri and ratelimit_uri != "memory://" and ratelimit_uri.startswith(("redis://", "rediss://")),
             "rate_limits",
             "Rate limits use shared Redis storage.",
-            "Set RATELIMIT_STORAGE_URI=redis://... or rediss://...",
+            "Attach Render Key Value and set RATELIMIT_STORAGE_URI from its connectionString.",
         ),
         _check(
             _present(config.get("REDIS_URL")) and str(config.get("REDIS_URL")).startswith(("redis://", "rediss://")),
             "redis",
             "REDIS_URL is configured.",
-            "Set REDIS_URL for rate limits, queues, and realtime fanout.",
+            "Attach Render Key Value and set REDIS_URL from its connectionString.",
         ),
         _check(
             _present(config.get("SUPABASE_URL")) and _present(config.get("SUPABASE_KEY")),
